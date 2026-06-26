@@ -1,0 +1,39 @@
+apiVersion: "tinkerbell.org/v1alpha1"
+kind: Workflow
+metadata:
+  name: {{ .WorkflowName }}
+  namespace: tink
+spec:
+  templateRef: {{ .TemplateName }}
+  hardwareRef: {{ .ServerName }}
+  bootOptions:
+    toggleAllowNetboot: true
+  hardwareMap:
+    mac: {{ .MAC }}
+    artifact_server_ip_port: {{ .ArtifactServer }}
+    image_name: {{ .ImageName }} 
+    mask: "{{ .Mask }}"
+    ip: {{ .IpAddress }} 
+    gateway: {{ .Gateway }} 
+    password: "{{ .Password }}" 
+    ssh: "{{ .SSH }}" 
+    hostname: {{ .Hostname }} 
+    hypervisor_id: {{ .HypervisorID }}
+    control_plane_grpc_endpoint: {{ .ControlPlaneGRPCEndpoint }}
+    control_plane_grpc_tls: "{{ .ControlPlaneGRPCTLS }}"
+    control_plane_grpc_authority: "{{ .ControlPlaneGRPCAuthority }}"
+    control_plane_grpc_ca_file: "{{ .ControlPlaneGRPCCAFile }}"
+    hypervisor_client_tls_cert_file: "{{ .HypervisorClientTLSCertFile }}"
+    hypervisor_client_tls_key_file: "{{ .HypervisorClientTLSKeyFile }}"
+    hypervisor_agent_token: "{{ .HypervisorAgentToken }}"
+    wg_interface: {{ .WGInterface }}
+    wg_address: "{{ .WGAddress }}"
+    wg_listen_port: "{{ .WGListenPort }}"
+    wg_private_key: "{{ .WGPrivateKey }}"
+    wg_peer_public_key: "{{ .WGPeerPublicKey }}"
+    wg_peer_endpoint: "{{ .WGPeerEndpoint }}"
+    wg_peer_allowed_ips: "{{ .WGPeerAllowedIPs }}"
+    ssh_allowed_cidr: "{{ .SSHAllowedCIDR }}"
+    control_plane_ca_pem_b64: "{{ .ControlPlaneCAB64 }}"
+    hypervisor_client_cert_pem_b64: "{{ .HypervisorClientCertB64 }}"
+    hypervisor_client_key_pem_b64: "{{ .HypervisorClientKeyB64 }}"

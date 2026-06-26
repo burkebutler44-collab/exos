@@ -1,0 +1,15 @@
+[Unit]
+Description=Exos Hypervisor Agent
+After=network-online.target libvirtd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/exos/hypervisor-agent.env
+ExecStart=/usr/local/bin/exos-hypervisor-agent
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

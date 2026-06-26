@@ -1,0 +1,15 @@
+apiVersion: bmc.tinkerbell.org/v1alpha1
+kind: Job
+metadata:
+  name: {{ .JobName }}
+  namespace: {{ .Namespace }}
+spec:
+  machineRef:
+    name: {{ .ServerName }}
+    namespace: {{ .Namespace }}
+  tasks:
+    - oneTimeBootDeviceAction:
+        device:
+          - "pxe"
+        efiBoot: true
+    - powerAction: "on"

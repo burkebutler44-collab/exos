@@ -1,0 +1,6 @@
+.git
+bin
+tmp
+*.db
+*.sqlite
+*.sqlite3

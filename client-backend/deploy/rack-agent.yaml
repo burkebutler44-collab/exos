@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tink
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: exos-rack-agent
+  namespace: tink
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: exos-rack-agent
+  namespace: tink
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
+  - apiGroups: ["tinkerbell.org"]
+    resources: ["hardware", "templates", "workflows"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["bmc.tinkerbell.org"]
+    resources: ["machines", "jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: exos-rack-agent
+  namespace: tink
+subjects:
+  - kind: ServiceAccount
+    name: exos-rack-agent
+    namespace: tink
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: exos-rack-agent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exos-rack-agent
+  namespace: tink
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: exos-rack-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: exos-rack-agent
+    spec:
+      serviceAccountName: exos-rack-agent
+      containers:
+        - name: rack-agent
+          image: "{{RACK_AGENT_IMAGE}}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LOCATION
+              value: "ny"
+            - name: RACK_ID
+              value: "ny"
+            - name: AGENT_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NATS_URL
+              value: "{{RACK_AGENT_NATS_URL}}"
+            - name: NATS_COMMAND_STREAM
+              value: "RACK_COMMANDS"
+            - name: NATS_COMMAND_CONSUMER_PREFIX
+              value: "rack-agent"
+            - name: NATS_COMMAND_ACK_WAIT
+              value: "10m"
+            - name: TINKERBELL_ADAPTER_MODE
+              value: "kubernetes"
+            - name: IPMI_ADAPTER_MODE
+              value: "kubernetes"
+            - name: TINKERBELL_NAMESPACE
+              value: "tink"
+            - name: TINKERBELL_ARTIFACT_SERVER
+              value: "{{ARTIFACT_SERVER}}"
+            - name: HEARTBEAT_INTERVAL
+              value: "15s"
+            - name: BMC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: exos-lab-bmc-auth
+                  key: username
+                  optional: true
+            - name: BMC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: exos-lab-bmc-auth
+                  key: password
+                  optional: true

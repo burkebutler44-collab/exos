@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package relay.v1;
+
+option go_package = "relay/client-backend/gen/go/relay/v1;relayv1";
+
+service ProvisionerService {
+  rpc ProvisionServer(ProvisionServerRequest) returns (ProvisionServerResponse);
+  rpc PowerCycleServer(PowerCycleServerRequest) returns (PowerCycleServerResponse);
+  rpc ReinstallServer(ReinstallServerRequest) returns (ReinstallServerResponse);
+  rpc DeprovisionServer(DeprovisionServerRequest) returns (DeprovisionServerResponse);
+}
+
+message ProvisionServerRequest {
+  string organization_id = 1;
+  string server_id = 2;
+  string project_id = 3;
+}
+
+message ProvisionServerResponse {
+  string server_id = 1;
+  string status = 2;
+}
+
+message PowerCycleServerRequest {
+  string organization_id = 1;
+  string server_id = 2;
+}
+
+message PowerCycleServerResponse {
+  string server_id = 1;
+  string status = 2;
+}
+
+message ReinstallServerRequest {
+  string organization_id = 1;
+  string server_id = 2;
+}
+
+message ReinstallServerResponse {
+  string server_id = 1;
+  string status = 2;
+}
+
+message DeprovisionServerRequest {
+  string organization_id = 1;
+  string server_id = 2;
+}
+
+message DeprovisionServerResponse {
+  string server_id = 1;
+  string status = 2;
+}

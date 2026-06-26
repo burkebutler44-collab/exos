@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package relay.v1;
+
+option go_package = "relay/client-backend/gen/go/relay/v1;relayv1";
+
+service OrganizationService {
+  rpc GetOrganization(GetOrganizationRequest) returns (GetOrganizationResponse);
+}
+
+message GetOrganizationRequest {
+  string organization_id = 1;
+}
+
+message Organization {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+}
+
+message GetOrganizationResponse {
+  Organization organization = 1;
+}

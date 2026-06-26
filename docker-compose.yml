@@ -1,0 +1,74 @@
+name: exos
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: exos
+      POSTGRES_USER: exos
+      POSTGRES_PASSWORD: exos
+    ports:
+      - "5432:5432"
+    volumes:
+      - exos-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exos -d exos"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  nats:
+    image: nats:2-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  api:
+    build:
+      context: ./client-backend
+      target: api
+    environment:
+      APP_ENV: development
+      HTTP_ADDR: :8080
+      GRPC_ADDR: :9090
+      DATABASE_URL: postgres://exos:exos@postgres:5432/exos?sslmode=disable
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}
+      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:-${VITE_AUTH0_CLIENT_ID:-}}
+      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE:-}
+      AUTH0_ISSUER: ${AUTH0_ISSUER:-}
+      AUTH0_JWKS_URL: ${AUTH0_JWKS_URL:-}
+      ALLOW_INSECURE_DEV_AUTH_HEADERS: ${ALLOW_INSECURE_DEV_AUTH_HEADERS:-true}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      NATS_URL: nats://nats:4222
+      NATS_COMMAND_STREAM: RACK_COMMANDS
+      NATS_MONITORING_URL: http://nats:8222
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      HYPERVISOR_AGENT_TOKEN: ${HYPERVISOR_AGENT_TOKEN:-}
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+
+  client-app:
+    build:
+      context: ./client-app
+      args:
+        VITE_AUTH0_DOMAIN: ${VITE_AUTH0_DOMAIN:-}
+        VITE_AUTH0_CLIENT_ID: ${VITE_AUTH0_CLIENT_ID:-}
+        VITE_AUTH0_AUDIENCE: ${VITE_AUTH0_AUDIENCE:-}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  exos-postgres-data:

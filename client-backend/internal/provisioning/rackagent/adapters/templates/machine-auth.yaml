@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .AuthName }}
+  namespace: tink
+type: Opaque
+stringData:
+  username: {{ .IpmiUsername }}
+  password: {{ .IpmiPassword }}

@@ -1,0 +1,28 @@
+apiVersion: tinkerbell.org/v1alpha1
+kind: Hardware
+metadata:
+  name: {{ .ServerName }}
+  namespace: tink
+spec:
+  disks:
+  - device: {{ .DiskName }}
+  interfaces:
+  - dhcp:
+      arch: x86_64
+      hostname: 
+      ip:
+        address: {{ .Address }}
+        gateway: {{ .Gateway }}
+        netmask: {{ .Netmask }}
+      lease_time: 86400
+      mac: {{ .MAC }}
+      name_servers:
+      - 1.1.1.1
+      - 8.8.8.8
+      uefi: true
+    netboot:
+      allowPXE: true
+      allowWorkflow: true
+      ipxe:
+        binary: {{ .Binary }}
+        contents: {{ printf "%q" .CustomIpxe }}

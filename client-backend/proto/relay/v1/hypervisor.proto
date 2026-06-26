@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package relay.v1;
+
+option go_package = "relay/client-backend/gen/go/relay/v1;relayv1";
+
+service HypervisorService {
+  rpc ReportSnapshot(ReportSnapshotRequest) returns (ReportSnapshotResponse);
+  rpc Connect(stream HypervisorEvent) returns (stream HypervisorCommand);
+}
+
+message ReportSnapshotRequest {
+  HostSnapshot snapshot = 1;
+}
+
+message ReportSnapshotResponse {
+  string status = 1;
+}
+
+message HypervisorEvent {
+  string hypervisor_id = 1;
+  oneof event {
+    HostSnapshot snapshot = 2;
+    VMCommandResult command_result = 3;
+  }
+}
+
+message HypervisorCommand {
+  string command_id = 1;
+  oneof command {
+    CreateVMCommand create_vm = 2;
+    DeleteVMCommand delete_vm = 3;
+    PowerVMCommand power_vm = 4;
+  }
+}
+
+message HostSnapshot {
+  string hypervisor_id = 1;
+  string hostname = 2;
+  int64 collected_at_unix = 3;
+  int32 vcpus_total = 4;
+  int32 vcpus_active = 5;
+  uint64 memory_total_bytes = 6;
+  uint64 memory_active_bytes = 7;
+  uint64 disk_total_bytes = 8;
+  uint64 disk_available_bytes = 9;
+  repeated VMInfo vms = 10;
+  string wireguard_interface = 11;
+  string control_plane_address = 12;
+}
+
+message VMInfo {
+  string id = 1;
+  string name = 2;
+  string status = 3;
+  int32 vcpus = 4;
+  uint64 memory_bytes = 5;
+  uint64 disk_bytes = 6;
+  repeated string mac_addresses = 7;
+  repeated string ip_addresses = 8;
+  map<string, string> metadata = 9;
+}
+
+message CreateVMCommand {
+  string name = 1;
+  int32 vcpus = 2;
+  int32 memory_mib = 3;
+  int32 disk_gib = 4;
+  string image_path = 5;
+  string cloud_init_iso_path = 6;
+  string network_name = 7;
+  string mac_address = 8;
+  map<string, string> metadata = 9;
+}
+
+message DeleteVMCommand {
+  string name = 1;
+  bool remove_disk = 2;
+  bool force_power_off = 3;
+}
+
+message PowerVMCommand {
+  string name = 1;
+  string action = 2;
+}
+
+message VMCommandResult {
+  string command_id = 1;
+  string name = 2;
+  string status = 3;
+  string message = 4;
+}

@@ -1,0 +1,11 @@
+apiVersion: bmc.tinkerbell.org/v1alpha1
+kind: Job
+metadata:
+  name: {{ .JobName }}
+  namespace: tink
+spec:
+  machineRef:
+    name: {{ .ServerName }}
+    namespace: tink
+  tasks:
+    - powerAction: "off"

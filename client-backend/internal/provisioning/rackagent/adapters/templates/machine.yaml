@@ -1,0 +1,16 @@
+apiVersion: bmc.tinkerbell.org/v1alpha1
+kind: Machine
+metadata:
+  name: {{ .ServerName }}
+  namespace: tink
+spec:
+  connection:
+    host: {{ .IpmiIp }}
+    insecureTLS: true
+    authSecretRef:
+      name: {{ .AuthName }}
+      namespace: tink
+    providerOptions:
+      redfish:
+        port: 443
+        useBasicAuth: true
