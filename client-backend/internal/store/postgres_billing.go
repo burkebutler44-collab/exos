@@ -66,6 +66,16 @@ func (s *PostgresStore) SetOrderStripeCheckoutSession(ctx context.Context, organ
 		organizationID, orderID, stripeCheckoutSessionID))
 }
 
+func (s *PostgresStore) SetOrderStripePaymentIntent(ctx context.Context, organizationID, orderID uuid.UUID, stripePaymentIntentID string) (domain.Order, error) {
+	return scanOrder(s.pool.QueryRow(ctx, `
+		update orders
+		set stripe_payment_intent_id = $3,
+			updated_at = now()
+		where organization_id = $1 and id = $2 and status = 'pending'
+		returning id, organization_id, created_by_user_id, status, order_type, subtotal_cents, tax_cents, total_cents, stripe_checkout_session_id, stripe_payment_intent_id, metadata, created_at, updated_at`,
+		organizationID, orderID, stripePaymentIntentID))
+}
+
 func (s *PostgresStore) ListOrders(ctx context.Context, organizationID uuid.UUID) ([]domain.Order, error) {
 	rows, err := s.pool.Query(ctx, `
 		select id, organization_id, created_by_user_id, status, order_type, subtotal_cents, tax_cents, total_cents, stripe_checkout_session_id, stripe_payment_intent_id, metadata, created_at, updated_at
@@ -102,6 +112,18 @@ func (s *PostgresStore) MarkOrderPaidAndActivate(ctx context.Context, organizati
 	defer tx.Rollback(ctx)
 
 	order, err := scanOrder(tx.QueryRow(ctx, `
+		select id, organization_id, created_by_user_id, status, order_type, subtotal_cents, tax_cents, total_cents,
+			stripe_checkout_session_id, stripe_payment_intent_id, metadata, created_at, updated_at
+		from orders
+		where organization_id = $1 and id = $2
+		for update`, organizationID, orderID))
+	if err != nil {
+		return domain.Order{}, err
+	}
+	if order.Status == domain.OrderPaid {
+		return order, tx.Commit(ctx)
+	}
+	order, err = scanOrder(tx.QueryRow(ctx, `
 		update orders
 		set status = 'paid', stripe_payment_intent_id = coalesce($3, stripe_payment_intent_id), updated_at = now()
 		where organization_id = $1 and id = $2

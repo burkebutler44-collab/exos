@@ -175,6 +175,21 @@ type stripeCheckoutSession struct {
 	URL string `json:"url"`
 }
 
+type stripePaymentIntentParams struct {
+	CustomerID     string
+	PaymentMethod  string
+	OrganizationID string
+	OrderID        string
+	Description    string
+	AmountCents    int64
+	Currency       string
+}
+
+type stripePaymentIntent struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
 type stripeSetupIntent struct {
 	ID            string `json:"id"`
 	ClientSecret  string `json:"client_secret"`
@@ -260,6 +275,24 @@ func (c *stripeClient) createCheckoutSession(ctx context.Context, params stripeC
 	var session stripeCheckoutSession
 	err := c.postForm(ctx, "/checkout/sessions", values, "checkout-"+params.OrderID, &session)
 	return session, err
+}
+
+func (c *stripeClient) createAndConfirmPaymentIntent(ctx context.Context, params stripePaymentIntentParams) (stripePaymentIntent, error) {
+	values := url.Values{}
+	values.Set("amount", fmt.Sprintf("%d", params.AmountCents))
+	values.Set("currency", strings.ToLower(params.Currency))
+	values.Set("customer", params.CustomerID)
+	values.Set("payment_method", params.PaymentMethod)
+	values.Set("confirm", "true")
+	values.Set("off_session", "true")
+	values.Add("payment_method_types[]", "card")
+	values.Set("description", params.Description)
+	values.Set("metadata[organization_id]", params.OrganizationID)
+	values.Set("metadata[order_id]", params.OrderID)
+
+	var intent stripePaymentIntent
+	err := c.postForm(ctx, "/payment_intents", values, "server-order-charge-"+params.OrderID, &intent)
+	return intent, err
 }
 
 func (c *stripeClient) retrieveSetupIntent(ctx context.Context, setupIntentID string) (stripeSetupIntent, error) {

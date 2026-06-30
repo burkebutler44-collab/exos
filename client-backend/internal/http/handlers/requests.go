@@ -121,9 +121,11 @@ type createCloudRequest struct {
 }
 
 type allocateServerRequest struct {
-	ServerID        string  `json:"server_id" binding:"required"`
-	ProjectID       *string `json:"project_id"`
-	BillingInterval string  `json:"billing_interval"`
+	ServerFamilyID    string   `json:"server_family_id" binding:"required"`
+	ConfigurationID   string   `json:"configuration_id" binding:"required"`
+	ProjectID         *string  `json:"project_id"`
+	BillingInterval   string   `json:"billing_interval"`
+	HardwareOptionIDs []string `json:"hardware_option_ids"`
 }
 
 type updateCloudRequest struct {
@@ -192,6 +194,28 @@ type createAdminServerRequest struct {
 	YearlyPriceCents    int64   `json:"yearly_price_cents"`
 	Provisionable       bool    `json:"provisionable"`
 	Notes               string  `json:"notes"`
+}
+
+type createHardwareOptionRequest struct {
+	OptionType             string  `json:"option_type" binding:"required"`
+	Label                  string  `json:"label" binding:"required"`
+	Description            string  `json:"description"`
+	Unit                   string  `json:"unit"`
+	ValueText              string  `json:"value_text"`
+	ValueGB                *int32  `json:"value_gb"`
+	PriceDeltaCents        int64   `json:"price_delta_cents"`
+	HourlyPriceDeltaCents  int64   `json:"hourly_price_delta_cents"`
+	QuarterlyDeltaCents    int64   `json:"quarterly_price_delta_cents"`
+	YearlyDeltaCents       int64   `json:"yearly_price_delta_cents"`
+	Currency               string  `json:"currency"`
+	QuantityAvailable      int32   `json:"quantity_available"`
+	FulfillmentMode        string  `json:"fulfillment_mode"`
+	EstimatedReadyMinHours int32   `json:"estimated_ready_min_hours"`
+	EstimatedReadyMaxHours int32   `json:"estimated_ready_max_hours"`
+	LocationID             *string `json:"location_id"`
+	HardwareProfileName    string  `json:"hardware_profile_name"`
+	CPUModel               string  `json:"cpu_model"`
+	Active                 *bool   `json:"active"`
 }
 
 type updateVirtualMachineRequest struct {

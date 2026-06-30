@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -349,12 +350,51 @@ func (s *PostgresStore) CreateAdminServer(ctx context.Context, params CreateAdmi
 		return AdminServerListItem{}, err
 	}
 
+	familySlug := normalizeSlug(fmt.Sprintf("%s-%d-core", params.CPUModel, params.CoreCount))
+	var serverFamilyID uuid.UUID
+	if err := tx.QueryRow(ctx, `
+		with existing as (
+			select id
+			from server_families
+			where lower(cpu_model) = lower($1)
+				and core_count = $3
+			order by created_at
+			limit 1
+		),
+		inserted as (
+			insert into server_families (
+				display_name, slug, cpu_manufacturer, cpu_model, core_count, thread_count, workload_category
+			)
+			select
+				$1,
+				$2,
+				case
+					when lower($1) like '%amd%' or lower($1) like '%epyc%' or lower($1) like '%ryzen%' then 'AMD'
+					when lower($1) like '%intel%' or lower($1) like '%xeon%' then 'Intel'
+					else ''
+				end,
+				$1,
+				$3,
+				$3 * 2,
+				case when $4 >= 384 then 'memory' else 'cpu' end
+			where not exists (select 1 from existing)
+			on conflict (slug) do update set updated_at = now()
+			returning id
+		)
+		select id from existing
+		union all
+		select id from inserted
+		limit 1`,
+		params.CPUModel, familySlug, params.CoreCount, params.RAMGB).Scan(&serverFamilyID); err != nil {
+		return AdminServerListItem{}, err
+	}
+
 	var serverID uuid.UUID
 	if err := tx.QueryRow(ctx, `
-		insert into servers (rack_id, status, bmc_address, mac_address, provisionable, metadata)
-		values ($1, 'available', $2, $3, $4, $5)
+		insert into servers (rack_id, server_family_id, status, bmc_address, mac_address, provisionable, metadata)
+		values ($1, $2, 'available', $3, $4, $5, $6)
 		returning id`,
-		params.RackID, params.BMCAddress, params.MACAddress, params.Provisionable, metadataBytes).Scan(&serverID); err != nil {
+		params.RackID, serverFamilyID, params.BMCAddress, params.MACAddress, params.Provisionable, metadataBytes).Scan(&serverID); err != nil {
 		return AdminServerListItem{}, err
 	}
 

@@ -175,6 +175,10 @@ func NewRouterWithOptions(svc *services.Services, handlerOptions []handlers.Hand
 
 	admin.GET("/locations/health", platformPermission(domain.PlatformRacksView), h.AdminListLocationHealth)
 	admin.GET("/hardware/cpu-profiles", platformPermission(domain.PlatformServersView), h.AdminListCPUProfiles)
+	admin.GET("/hardware/options", platformPermission(domain.PlatformServersView), h.AdminListHardwareOptions)
+	admin.POST("/hardware/options", platformPermission(domain.PlatformServersUpdate), h.AdminCreateHardwareOption)
+	admin.GET("/hardware/fulfillment-orders", platformPermission(domain.PlatformServersView), h.AdminListHardwareFulfillmentOrders)
+	admin.POST("/hardware/fulfillment-orders/:orderId/ready", platformPermission(domain.PlatformServersUpdate), h.AdminMarkHardwareFulfillmentReady)
 	admin.GET("/network/locations", platformPermission(domain.PlatformNetworkView), h.AdminListLocations)
 	admin.GET("/network/switches", platformPermission(domain.PlatformNetworkView), h.AdminListSwitches)
 	admin.GET("/network/edge-routers", platformPermission(domain.PlatformNetworkView), h.AdminListEdgeRouters)

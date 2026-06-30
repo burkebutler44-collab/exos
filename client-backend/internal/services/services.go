@@ -62,7 +62,7 @@ func (s *Services) ListServerCatalog(ctx context.Context) (store.ServerCatalog, 
 }
 
 func (s *Services) AllocateServer(ctx context.Context, actor domain.User, params store.AllocateServerParams) (store.AllocateServerResult, error) {
-	if actor.ID == uuid.Nil || params.OrganizationID == uuid.Nil || params.ServerID == uuid.Nil {
+	if actor.ID == uuid.Nil || params.OrganizationID == uuid.Nil || params.ServerFamilyID == uuid.Nil || strings.TrimSpace(params.ConfigurationID) == "" {
 		return store.AllocateServerResult{}, ErrInvalidInput
 	}
 	client, err := newStripeClientFromEnv()
@@ -73,6 +73,23 @@ func (s *Services) AllocateServer(ctx context.Context, actor domain.User, params
 	if err != nil {
 		return store.AllocateServerResult{}, err
 	}
+	methods, err := s.repo.ListPaymentMethods(ctx, params.OrganizationID)
+	if err != nil {
+		return store.AllocateServerResult{}, err
+	}
+	var paymentMethod *domain.PaymentMethod
+	for i := range methods {
+		if methods[i].IsDefault {
+			paymentMethod = &methods[i]
+			break
+		}
+	}
+	if paymentMethod == nil && len(methods) > 0 {
+		paymentMethod = &methods[0]
+	}
+	if paymentMethod == nil {
+		return store.AllocateServerResult{}, ErrPaymentMethodRequired
+	}
 
 	params.CreatedByUserID = actor.ID
 	result, err := s.repo.AllocateServer(ctx, params)
@@ -80,26 +97,34 @@ func (s *Services) AllocateServer(ctx context.Context, actor domain.User, params
 		return store.AllocateServerResult{}, err
 	}
 	description := checkoutDescription(result.Order)
-	session, err := client.createCheckoutSession(ctx, stripeCheckoutSessionParams{
+	intent, err := client.createAndConfirmPaymentIntent(ctx, stripePaymentIntentParams{
 		CustomerID:     stripeCustomerID,
+		PaymentMethod:  paymentMethod.StripePaymentMethodID,
 		OrganizationID: params.OrganizationID.String(),
 		OrderID:        result.Order.ID.String(),
-		Name:           "Exos dedicated server",
 		Description:    description,
 		AmountCents:    result.Order.TotalCents,
 		Currency:       account.Currency,
-		SuccessURL:     frontendURL(params.OrganizationID, "billing", map[string]string{"checkout": "success", "order_id": result.Order.ID.String()}),
-		CancelURL:      frontendURL(params.OrganizationID, "deploy", map[string]string{"checkout": "cancelled", "order_id": result.Order.ID.String()}),
 	})
 	if err != nil {
 		return store.AllocateServerResult{}, err
 	}
-	result.Order, err = s.repo.SetOrderStripeCheckoutSession(ctx, params.OrganizationID, result.Order.ID, session.ID)
+	if intent.Status != "succeeded" {
+		return store.AllocateServerResult{}, fmt.Errorf("%w: payment requires customer action", ErrStripeRequestFailed)
+	}
+	result.Order, err = s.repo.SetOrderStripePaymentIntent(ctx, params.OrganizationID, result.Order.ID, intent.ID)
 	if err != nil {
 		return store.AllocateServerResult{}, err
 	}
-	result.CheckoutURL = session.URL
-	_ = s.audit(ctx, params.OrganizationID, &actor.ID, "server.ordered", "server", &params.ServerID, map[string]string{"order_id": result.Order.ID.String()})
+	result.Order, err = s.repo.MarkOrderPaidAndActivate(ctx, params.OrganizationID, result.Order.ID, &intent.ID)
+	if err != nil {
+		return store.AllocateServerResult{}, err
+	}
+	_ = s.audit(ctx, params.OrganizationID, &actor.ID, "server.ordered", "server", &result.Server.ID, map[string]string{
+		"order_id":         result.Order.ID.String(),
+		"server_family_id": params.ServerFamilyID.String(),
+		"configuration_id": params.ConfigurationID,
+	})
 	return result, nil
 }
 
@@ -251,6 +276,28 @@ func (s *Services) ListAdminServers(ctx context.Context) ([]store.AdminServerLis
 
 func (s *Services) CreateAdminServer(ctx context.Context, params store.CreateAdminServerParams) (store.AdminServerListItem, error) {
 	return s.repo.CreateAdminServer(ctx, params)
+}
+
+func (s *Services) ListHardwareOptions(ctx context.Context) ([]store.ServerCatalogHardwareOption, error) {
+	return s.repo.ListHardwareOptions(ctx)
+}
+
+func (s *Services) CreateHardwareOption(ctx context.Context, params store.CreateHardwareOptionParams) (store.ServerCatalogHardwareOption, error) {
+	if strings.TrimSpace(params.OptionType) == "" || strings.TrimSpace(params.Label) == "" {
+		return store.ServerCatalogHardwareOption{}, ErrInvalidInput
+	}
+	return s.repo.CreateHardwareOption(ctx, params)
+}
+
+func (s *Services) ListHardwareFulfillmentOrders(ctx context.Context) ([]store.HardwareFulfillmentOrder, error) {
+	return s.repo.ListHardwareFulfillmentOrders(ctx)
+}
+
+func (s *Services) MarkHardwareFulfillmentReady(ctx context.Context, orderID uuid.UUID) (store.HardwareFulfillmentOrder, error) {
+	if orderID == uuid.Nil {
+		return store.HardwareFulfillmentOrder{}, ErrInvalidInput
+	}
+	return s.repo.MarkHardwareFulfillmentReady(ctx, orderID)
 }
 
 func (s *Services) ListAdminRacks(ctx context.Context) ([]store.AdminRackListItem, error) {

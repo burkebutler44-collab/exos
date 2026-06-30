@@ -495,25 +495,34 @@ type AdminProvisioningJobListItem struct {
 }
 
 type ServerCatalog struct {
-	Plans []ServerCatalogPlan `json:"plans"`
+	Families []ServerCatalogPlan `json:"server_families"`
 }
 
 type ServerCatalogPlan struct {
-	ID                  string                       `json:"id"`
-	Name                string                       `json:"name"`
-	CPUModel            string                       `json:"cpu_model"`
-	CoreCount           int32                        `json:"core_count"`
-	Category            string                       `json:"category"`
-	StartingPriceCents  int64                        `json:"starting_price_cents"`
-	HourlyPriceCents    int64                        `json:"hourly_price_cents"`
-	MonthlyPriceCents   int64                        `json:"monthly_price_cents"`
-	QuarterlyPriceCents int64                        `json:"quarterly_price_cents"`
-	YearlyPriceCents    int64                        `json:"yearly_price_cents"`
-	AvailableCount      int64                        `json:"available_count"`
-	Locations           []ServerCatalogLocation      `json:"locations"`
-	RAMOptionsGB        []int32                      `json:"ram_options_gb"`
-	DiskOptions         []ServerCatalogDiskOption    `json:"disk_options"`
-	Configurations      []ServerCatalogConfiguration `json:"configurations"`
+	ID                  string                        `json:"id"`
+	Name                string                        `json:"display_name"`
+	Slug                string                        `json:"slug"`
+	CPUManufacturer     string                        `json:"cpu_manufacturer"`
+	CPUModel            string                        `json:"cpu_model"`
+	CoreCount           int32                         `json:"core_count"`
+	ThreadCount         int32                         `json:"thread_count"`
+	BaseClockGHz        *float64                      `json:"base_clock_ghz,omitempty"`
+	BoostClockGHz       *float64                      `json:"boost_clock_ghz,omitempty"`
+	Generation          string                        `json:"generation"`
+	Category            string                        `json:"category"`
+	Description         string                        `json:"description"`
+	FeatureBadges       []string                      `json:"feature_badges"`
+	StartingPriceCents  int64                         `json:"starting_price_cents"`
+	HourlyPriceCents    int64                         `json:"hourly_price_cents"`
+	MonthlyPriceCents   int64                         `json:"monthly_price_cents"`
+	QuarterlyPriceCents int64                         `json:"quarterly_price_cents"`
+	YearlyPriceCents    int64                         `json:"yearly_price_cents"`
+	AvailableCount      int64                         `json:"available_count"`
+	Locations           []ServerCatalogLocation       `json:"locations"`
+	RAMOptionsGB        []int32                       `json:"ram_options_gb"`
+	DiskOptions         []ServerCatalogDiskOption     `json:"disk_options"`
+	HardwareOptions     []ServerCatalogHardwareOption `json:"hardware_options"`
+	Configurations      []ServerCatalogConfiguration  `json:"configurations"`
 }
 
 type ServerCatalogLocation struct {
@@ -526,39 +535,128 @@ type ServerCatalogDiskOption struct {
 	StorageGB int32  `json:"storage_gb"`
 }
 
+type ServerCatalogHardwareOption struct {
+	ID                     uuid.UUID  `json:"id"`
+	OptionType             string     `json:"option_type"`
+	Label                  string     `json:"label"`
+	Description            string     `json:"description"`
+	Unit                   string     `json:"unit"`
+	ValueText              string     `json:"value_text"`
+	ValueGB                *int32     `json:"value_gb,omitempty"`
+	PriceDeltaCents        int64      `json:"price_delta_cents"`
+	HourlyPriceDeltaCents  int64      `json:"hourly_price_delta_cents"`
+	QuarterlyDeltaCents    int64      `json:"quarterly_price_delta_cents"`
+	YearlyDeltaCents       int64      `json:"yearly_price_delta_cents"`
+	Currency               string     `json:"currency"`
+	QuantityAvailable      int32      `json:"quantity_available"`
+	FulfillmentMode        string     `json:"fulfillment_mode"`
+	EstimatedReadyMinHours int32      `json:"estimated_ready_min_hours"`
+	EstimatedReadyMaxHours int32      `json:"estimated_ready_max_hours"`
+	LocationID             *uuid.UUID `json:"location_id,omitempty"`
+	LocationCode           *string    `json:"location_code,omitempty"`
+	LocationName           *string    `json:"location_name,omitempty"`
+	HardwareProfileName    string     `json:"hardware_profile_name,omitempty"`
+	CPUModel               string     `json:"cpu_model,omitempty"`
+	RequiresInstall        bool       `json:"requires_install"`
+	Active                 bool       `json:"active"`
+	CreatedAt              time.Time  `json:"created_at,omitempty"`
+	UpdatedAt              time.Time  `json:"updated_at,omitempty"`
+}
+
 type ServerCatalogConfiguration struct {
-	ID                  uuid.UUID `json:"id"`
-	PlanID              string    `json:"plan_id"`
-	Hostname            string    `json:"hostname"`
-	LocationCode        string    `json:"location_code"`
-	LocationName        string    `json:"location_name"`
-	HardwareProfileName string    `json:"hardware_profile_name"`
-	CPUModel            string    `json:"cpu_model"`
-	CoreCount           int32     `json:"core_count"`
-	RAMGB               int32     `json:"ram_gb"`
-	DiskName            string    `json:"disk_name"`
-	DiskDescription     string    `json:"disk_description"`
-	StorageGB           int32     `json:"storage_gb"`
-	HourlyPriceCents    int64     `json:"hourly_price_cents"`
-	MonthlyPriceCents   int64     `json:"monthly_price_cents"`
-	QuarterlyPriceCents int64     `json:"quarterly_price_cents"`
-	YearlyPriceCents    int64     `json:"yearly_price_cents"`
-	Available           bool      `json:"available"`
+	ID                     string                        `json:"id"`
+	ServerFamilyID         string                        `json:"server_family_id"`
+	LocationCode           string                        `json:"location_code"`
+	LocationName           string                        `json:"location_name"`
+	HardwareProfileName    string                        `json:"hardware_profile_name"`
+	CPUModel               string                        `json:"cpu_model"`
+	CoreCount              int32                         `json:"core_count"`
+	RAMGB                  int32                         `json:"ram_gb"`
+	DiskName               string                        `json:"disk_name"`
+	DiskDescription        string                        `json:"disk_description"`
+	DiskCount              int32                         `json:"disk_count"`
+	DiskSizeGB             int32                         `json:"disk_size_gb"`
+	DiskType               string                        `json:"disk_type"`
+	StorageGB              int32                         `json:"storage_gb"`
+	NetworkCapacity        string                        `json:"network_capacity"`
+	HourlyPriceCents       int64                         `json:"hourly_price_cents"`
+	MonthlyPriceCents      int64                         `json:"monthly_price_cents"`
+	QuarterlyPriceCents    int64                         `json:"quarterly_price_cents"`
+	YearlyPriceCents       int64                         `json:"yearly_price_cents"`
+	Available              bool                          `json:"available"`
+	AvailableQuantity      int32                         `json:"available_quantity"`
+	EstimatedReadyMinHours int32                         `json:"estimated_ready_min_hours"`
+	EstimatedReadyMaxHours int32                         `json:"estimated_ready_max_hours"`
+	HardwareOptions        []ServerCatalogHardwareOption `json:"hardware_options"`
+	PhysicalServerIDs      []uuid.UUID                   `json:"-"`
+	FamilyDisplayName      string                        `json:"-"`
+	FamilySlug             string                        `json:"-"`
+	CPUManufacturer        string                        `json:"-"`
+	ThreadCount            int32                         `json:"-"`
+	BaseClockGHz           *float64                      `json:"-"`
+	BoostClockGHz          *float64                      `json:"-"`
+	Generation             string                        `json:"-"`
+	WorkloadCategory       string                        `json:"-"`
+	FamilyDescription      string                        `json:"-"`
+	FeatureBadges          []string                      `json:"-"`
+	DisplayOrder           int32                         `json:"-"`
 }
 
 type AllocateServerParams struct {
-	OrganizationID  uuid.UUID
-	ProjectID       *uuid.UUID
-	ServerID        uuid.UUID
-	CreatedByUserID uuid.UUID
-	BillingInterval domain.BillingInterval
+	OrganizationID    uuid.UUID
+	ProjectID         *uuid.UUID
+	ServerFamilyID    uuid.UUID
+	ConfigurationID   string
+	CreatedByUserID   uuid.UUID
+	BillingInterval   domain.BillingInterval
+	HardwareOptionIDs []uuid.UUID
 }
 
 type AllocateServerResult struct {
-	Server            FleetServer  `json:"server"`
-	Order             domain.Order `json:"order"`
-	CheckoutURL       string       `json:"checkout_url,omitempty"`
-	BillableServiceID *uuid.UUID   `json:"billable_service_id,omitempty"`
+	Server               FleetServer  `json:"server"`
+	Order                domain.Order `json:"order"`
+	CheckoutURL          string       `json:"checkout_url,omitempty"`
+	BillableServiceID    *uuid.UUID   `json:"billable_service_id,omitempty"`
+	ReservationExpiresAt *time.Time   `json:"reservation_expires_at,omitempty"`
+}
+
+type CreateHardwareOptionParams struct {
+	OptionType             string
+	Label                  string
+	Description            string
+	Unit                   string
+	ValueText              string
+	ValueGB                *int32
+	PriceDeltaCents        int64
+	HourlyPriceDeltaCents  int64
+	QuarterlyDeltaCents    int64
+	YearlyDeltaCents       int64
+	Currency               string
+	QuantityAvailable      int32
+	FulfillmentMode        string
+	EstimatedReadyMinHours int32
+	EstimatedReadyMaxHours int32
+	LocationID             *uuid.UUID
+	HardwareProfileName    string
+	CPUModel               string
+	Active                 bool
+}
+
+type HardwareFulfillmentOrder struct {
+	OrderID                uuid.UUID               `json:"order_id"`
+	OrganizationID         uuid.UUID               `json:"organization_id"`
+	OrganizationName       string                  `json:"organization_name"`
+	ServerID               *uuid.UUID              `json:"server_id,omitempty"`
+	ServerHostname         string                  `json:"server_hostname"`
+	Status                 domain.OrderStatus      `json:"status"`
+	TotalCents             int64                   `json:"total_cents"`
+	RequiresModification   bool                    `json:"requires_modification"`
+	FulfillmentReady       bool                    `json:"fulfillment_ready"`
+	EstimatedReadyMinHours int32                   `json:"estimated_ready_min_hours"`
+	EstimatedReadyMaxHours int32                   `json:"estimated_ready_max_hours"`
+	HardwareOptions        []PendingHardwareOption `json:"hardware_options"`
+	CreatedAt              time.Time               `json:"created_at"`
+	UpdatedAt              time.Time               `json:"updated_at"`
 }
 
 type CreateAdminServerParams struct {
@@ -799,6 +897,10 @@ type Repository interface {
 	ListAdminBillingAccounts(ctx context.Context) ([]AdminBillingAccountListItem, error)
 	ListAdminServers(ctx context.Context) ([]AdminServerListItem, error)
 	CreateAdminServer(ctx context.Context, params CreateAdminServerParams) (AdminServerListItem, error)
+	ListHardwareOptions(ctx context.Context) ([]ServerCatalogHardwareOption, error)
+	CreateHardwareOption(ctx context.Context, params CreateHardwareOptionParams) (ServerCatalogHardwareOption, error)
+	ListHardwareFulfillmentOrders(ctx context.Context) ([]HardwareFulfillmentOrder, error)
+	MarkHardwareFulfillmentReady(ctx context.Context, orderID uuid.UUID) (HardwareFulfillmentOrder, error)
 	ListAdminRacks(ctx context.Context) ([]AdminRackListItem, error)
 	ListAdminLocations(ctx context.Context) ([]AdminLocationListItem, error)
 	ListAdminCPUProfiles(ctx context.Context) ([]AdminCPUProfileListItem, error)

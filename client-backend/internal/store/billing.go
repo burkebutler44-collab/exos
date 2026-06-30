@@ -31,21 +31,42 @@ type CreateOrderParams struct {
 }
 
 type PendingServiceMetadata struct {
-	ServiceType            domain.ServiceType     `json:"service_type"`
-	ServiceID              *uuid.UUID             `json:"service_id,omitempty"`
-	ProjectID              *uuid.UUID             `json:"project_id,omitempty"`
-	BillingMode            domain.BillingMode     `json:"billing_mode"`
-	BillingInterval        domain.BillingInterval `json:"billing_interval"`
-	Description            string                 `json:"description"`
-	Unit                   domain.BillingUnit     `json:"unit"`
-	UnitPriceCents         int64                  `json:"unit_price_cents"`
-	Quantity               string                 `json:"quantity"`
-	Currency               string                 `json:"currency"`
-	MonthlyHours           int64                  `json:"monthly_hours,omitempty"`
-	FirstPeriodStart       *time.Time             `json:"first_period_start,omitempty"`
-	FirstPeriodEnd         *time.Time             `json:"first_period_end,omitempty"`
-	FirstPeriodHours       int64                  `json:"first_period_hours,omitempty"`
-	FirstPeriodAmountCents int64                  `json:"first_period_amount_cents,omitempty"`
+	ServiceType            domain.ServiceType      `json:"service_type"`
+	ServiceID              *uuid.UUID              `json:"service_id,omitempty"`
+	ProjectID              *uuid.UUID              `json:"project_id,omitempty"`
+	BillingMode            domain.BillingMode      `json:"billing_mode"`
+	BillingInterval        domain.BillingInterval  `json:"billing_interval"`
+	Description            string                  `json:"description"`
+	Unit                   domain.BillingUnit      `json:"unit"`
+	UnitPriceCents         int64                   `json:"unit_price_cents"`
+	Quantity               string                  `json:"quantity"`
+	Currency               string                  `json:"currency"`
+	MonthlyHours           int64                   `json:"monthly_hours,omitempty"`
+	FirstPeriodStart       *time.Time              `json:"first_period_start,omitempty"`
+	FirstPeriodEnd         *time.Time              `json:"first_period_end,omitempty"`
+	FirstPeriodHours       int64                   `json:"first_period_hours,omitempty"`
+	FirstPeriodAmountCents int64                   `json:"first_period_amount_cents,omitempty"`
+	HardwareOptions        []PendingHardwareOption `json:"hardware_options,omitempty"`
+	RequiresModification   bool                    `json:"requires_modification,omitempty"`
+	EstimatedReadyMinHours int32                   `json:"estimated_ready_min_hours,omitempty"`
+	EstimatedReadyMaxHours int32                   `json:"estimated_ready_max_hours,omitempty"`
+}
+
+type PendingHardwareOption struct {
+	ID                     uuid.UUID `json:"id"`
+	OptionType             string    `json:"option_type"`
+	Label                  string    `json:"label"`
+	Description            string    `json:"description,omitempty"`
+	Unit                   string    `json:"unit"`
+	ValueText              string    `json:"value_text,omitempty"`
+	ValueGB                *int32    `json:"value_gb,omitempty"`
+	PriceDeltaCents        int64     `json:"price_delta_cents"`
+	HourlyPriceDeltaCents  int64     `json:"hourly_price_delta_cents"`
+	QuarterlyDeltaCents    int64     `json:"quarterly_price_delta_cents"`
+	YearlyDeltaCents       int64     `json:"yearly_price_delta_cents"`
+	FulfillmentMode        string    `json:"fulfillment_mode"`
+	EstimatedReadyMinHours int32     `json:"estimated_ready_min_hours"`
+	EstimatedReadyMaxHours int32     `json:"estimated_ready_max_hours"`
 }
 
 type CreateBillableServiceParams struct {
@@ -126,6 +147,7 @@ type BillingRepository interface {
 
 	CreateOrder(ctx context.Context, params CreateOrderParams) (domain.Order, error)
 	SetOrderStripeCheckoutSession(ctx context.Context, organizationID, orderID uuid.UUID, stripeCheckoutSessionID string) (domain.Order, error)
+	SetOrderStripePaymentIntent(ctx context.Context, organizationID, orderID uuid.UUID, stripePaymentIntentID string) (domain.Order, error)
 	ListOrders(ctx context.Context, organizationID uuid.UUID) ([]domain.Order, error)
 	GetOrder(ctx context.Context, organizationID, orderID uuid.UUID) (domain.Order, error)
 	MarkOrderPaidAndActivate(ctx context.Context, organizationID, orderID uuid.UUID, stripePaymentIntentID *string) (domain.Order, error)

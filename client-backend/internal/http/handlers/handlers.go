@@ -75,8 +75,10 @@ func writeError(c *gin.Context, err error) {
 		status, message = http.StatusConflict, "invitation is not pending"
 	case errors.Is(err, services.ErrStripeNotConfigured):
 		status, message = http.StatusServiceUnavailable, "stripe is not configured"
+	case errors.Is(err, services.ErrPaymentMethodRequired):
+		status, message = http.StatusConflict, "add a payment method on the billing page before deploying"
 	case errors.Is(err, services.ErrStripeRequestFailed):
-		status, message = http.StatusBadGateway, "stripe request failed"
+		status, message = http.StatusPaymentRequired, "the card on file could not be charged"
 	case services.IsNotFound(err):
 		status, message = http.StatusNotFound, "not found"
 	case services.IsConflict(err):

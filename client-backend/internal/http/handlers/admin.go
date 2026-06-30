@@ -139,6 +139,80 @@ func (h *Handler) AdminCreateServer(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, item)
 }
+func (h *Handler) AdminListHardwareOptions(c *gin.Context) {
+	items, err := h.svc.ListHardwareOptions(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+func (h *Handler) AdminCreateHardwareOption(c *gin.Context) {
+	var req createHardwareOptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, services.ErrInvalidInput)
+		return
+	}
+	var locationID *uuid.UUID
+	if req.LocationID != nil && strings.TrimSpace(*req.LocationID) != "" {
+		parsed, err := uuid.Parse(strings.TrimSpace(*req.LocationID))
+		if err != nil {
+			writeError(c, services.ErrInvalidInput)
+			return
+		}
+		locationID = &parsed
+	}
+	active := true
+	if req.Active != nil {
+		active = *req.Active
+	}
+	item, err := h.svc.CreateHardwareOption(c.Request.Context(), store.CreateHardwareOptionParams{
+		OptionType:             strings.TrimSpace(req.OptionType),
+		Label:                  strings.TrimSpace(req.Label),
+		Description:            strings.TrimSpace(req.Description),
+		Unit:                   strings.TrimSpace(req.Unit),
+		ValueText:              strings.TrimSpace(req.ValueText),
+		ValueGB:                req.ValueGB,
+		PriceDeltaCents:        req.PriceDeltaCents,
+		HourlyPriceDeltaCents:  req.HourlyPriceDeltaCents,
+		QuarterlyDeltaCents:    req.QuarterlyDeltaCents,
+		YearlyDeltaCents:       req.YearlyDeltaCents,
+		Currency:               strings.TrimSpace(req.Currency),
+		QuantityAvailable:      req.QuantityAvailable,
+		FulfillmentMode:        strings.TrimSpace(req.FulfillmentMode),
+		EstimatedReadyMinHours: req.EstimatedReadyMinHours,
+		EstimatedReadyMaxHours: req.EstimatedReadyMaxHours,
+		LocationID:             locationID,
+		HardwareProfileName:    strings.TrimSpace(req.HardwareProfileName),
+		CPUModel:               strings.TrimSpace(req.CPUModel),
+		Active:                 active,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, item)
+}
+func (h *Handler) AdminListHardwareFulfillmentOrders(c *gin.Context) {
+	items, err := h.svc.ListHardwareFulfillmentOrders(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+func (h *Handler) AdminMarkHardwareFulfillmentReady(c *gin.Context) {
+	orderID, ok := paramID(c, "orderId")
+	if !ok {
+		return
+	}
+	item, err := h.svc.MarkHardwareFulfillmentReady(c.Request.Context(), orderID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, item)
+}
 func (h *Handler) AdminGetServer(c *gin.Context) {
 	adminPending(c, "admin server detail wiring pending")
 }

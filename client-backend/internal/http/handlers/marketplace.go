@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"relay/client-backend/internal/domain"
 	"relay/client-backend/internal/http/middleware"
@@ -31,7 +32,7 @@ func (h *Handler) AllocateServer(c *gin.Context) {
 	if !ok {
 		return
 	}
-	serverID, err := uuid.Parse(req.ServerID)
+	serverFamilyID, err := uuid.Parse(req.ServerFamilyID)
 	if err != nil {
 		writeError(c, services.ErrInvalidInput)
 		return
@@ -45,11 +46,22 @@ func (h *Handler) AllocateServer(c *gin.Context) {
 		}
 		projectID = &parsed
 	}
+	hardwareOptionIDs := make([]uuid.UUID, 0, len(req.HardwareOptionIDs))
+	for _, raw := range req.HardwareOptionIDs {
+		parsed, err := uuid.Parse(raw)
+		if err != nil {
+			writeError(c, services.ErrInvalidInput)
+			return
+		}
+		hardwareOptionIDs = append(hardwareOptionIDs, parsed)
+	}
 	result, err := h.svc.AllocateServer(c.Request.Context(), user, store.AllocateServerParams{
-		OrganizationID:  organizationID,
-		ProjectID:       projectID,
-		ServerID:        serverID,
-		BillingInterval: domain.BillingInterval(req.BillingInterval),
+		OrganizationID:    organizationID,
+		ProjectID:         projectID,
+		ServerFamilyID:    serverFamilyID,
+		ConfigurationID:   strings.TrimSpace(req.ConfigurationID),
+		BillingInterval:   domain.BillingInterval(req.BillingInterval),
+		HardwareOptionIDs: hardwareOptionIDs,
 	})
 	if err != nil {
 		writeError(c, err)

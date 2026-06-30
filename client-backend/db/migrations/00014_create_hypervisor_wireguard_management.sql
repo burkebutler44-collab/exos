@@ -53,26 +53,43 @@ create table hypervisor_agent_credentials (
 	updated_at timestamptz not null default now()
 );
 
-create index hypervisor_agent_credentials_hypervisor_status_idx on hypervisor_agent_credentials (hypervisor_id, status);
-
 create table hypervisor_conversions (
 	id uuid primary key default gen_random_uuid(),
 	server_id uuid not null references servers(id) on delete restrict,
 	hypervisor_id text not null references hypervisors(id) on delete restrict,
 	gateway_id text references wireguard_gateways(id) on delete restrict,
-	status text not null default 'pending' check (status in ('pending', 'allocating_network', 'provisioning', 'waiting_for_agent', 'ready', 'failed', 'rolled_back', 'decommissioning', 'decommissioned')),
+	status text not null default 'pending' check (
+		status in (
+			'pending',
+			'allocating_network',
+			'provisioning',
+			'waiting_for_agent',
+			'ready',
+			'failed',
+			'rolled_back',
+			'decommissioning',
+			'decommissioned'
+		)
+	),
 	failure_reason text not null default '',
 	metadata jsonb not null default '{}'::jsonb,
 	requested_by_user_id uuid references users(id) on delete set null,
 	started_at timestamptz not null default now(),
 	completed_at timestamptz,
 	created_at timestamptz not null default now(),
-	updated_at timestamptz not null default now(),
-	unique (server_id) where status not in ('failed', 'rolled_back', 'decommissioned'),
-	unique (hypervisor_id) where status not in ('failed', 'rolled_back', 'decommissioned')
+	updated_at timestamptz not null default now()
 );
 
-create index hypervisor_conversions_status_idx on hypervisor_conversions (status, created_at desc);
+create unique index hypervisor_conversions_active_server_uidx
+	on hypervisor_conversions (server_id)
+	where status not in ('failed', 'rolled_back', 'decommissioned');
+
+create unique index hypervisor_conversions_active_hypervisor_uidx
+	on hypervisor_conversions (hypervisor_id)
+	where status not in ('failed', 'rolled_back', 'decommissioned');
+
+create index hypervisor_conversions_status_idx
+	on hypervisor_conversions (status, created_at desc);
 
 -- +goose Down
 drop table if exists hypervisor_conversions;
