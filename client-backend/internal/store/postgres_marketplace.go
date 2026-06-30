@@ -646,10 +646,8 @@ func (s *PostgresStore) AllocateServer(ctx context.Context, params AllocateServe
 	priceCents := config.PriceForInterval(interval) + hardwareOptionsPriceDelta(selectedOptions, interval)
 	billingMode := prepaidBillingModeForInterval(interval)
 	billingUnit := billingUnitForInterval(interval)
-	now := time.Now().UTC()
-	reservationExpiresAt := now.Add(15 * time.Minute)
-	firstPeriodStart := now
-	firstPeriodEnd := nextBillingAnchor(now, interval)
+	firstPeriodStart := time.Now()
+	firstPeriodEnd := nextBillingAnchor(time.Now(), interval)
 	firstPeriodHours := billablePeriodHours(firstPeriodStart, firstPeriodEnd, interval)
 	firstPeriodAmountCents := proratedIntervalAmountCents(priceCents, firstPeriodHours, interval)
 	if firstPeriodAmountCents < 1 {
@@ -692,14 +690,10 @@ func (s *PostgresStore) AllocateServer(ctx context.Context, params AllocateServe
 		update servers
 		set organization_id = $2,
 			project_id = $3,
-			status = 'reserved',
-			reserved_cpu_cores = $4,
-			reserved_memory_mb = $5,
-			reserved_storage_gb = $6,
-			reservation_expires_at = $7,
+			status = 'active',
 			updated_at = now()
 		where id = $1`,
-		selectedServerID, params.OrganizationID, params.ProjectID, config.CoreCount, config.RAMGB*1024, config.StorageGB, reservationExpiresAt)
+		selectedServerID, params.OrganizationID, params.ProjectID)
 	if err != nil {
 		return AllocateServerResult{}, err
 	}
@@ -714,10 +708,10 @@ func (s *PostgresStore) AllocateServer(ctx context.Context, params AllocateServe
 	}
 	for _, server := range servers {
 		if server.ID == selectedServerID {
-			return AllocateServerResult{Server: server, Order: order, ReservationExpiresAt: &reservationExpiresAt}, nil
+			return AllocateServerResult{Server: server, Order: order}, nil
 		}
 	}
-	return AllocateServerResult{Order: order, ReservationExpiresAt: &reservationExpiresAt}, nil
+	return AllocateServerResult{Order: order}, nil
 }
 
 func catalogConfigurationFromRow(row catalogServerRow) ServerCatalogConfiguration {

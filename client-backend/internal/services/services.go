@@ -278,6 +278,27 @@ func (s *Services) CreateAdminServer(ctx context.Context, params store.CreateAdm
 	return s.repo.CreateAdminServer(ctx, params)
 }
 
+func (s *Services) AdminAssignServer(ctx context.Context, serverID, organizationID uuid.UUID) error {
+	if serverID == uuid.Nil || organizationID == uuid.Nil {
+		return ErrInvalidInput
+	}
+	return s.repo.AdminAssignServer(ctx, serverID, organizationID)
+}
+
+func (s *Services) AdminReleaseServer(ctx context.Context, serverID uuid.UUID) error {
+	if serverID == uuid.Nil {
+		return ErrInvalidInput
+	}
+	return s.repo.AdminReleaseServer(ctx, serverID)
+}
+
+func (s *Services) AdminRetireServer(ctx context.Context, serverID uuid.UUID) error {
+	if serverID == uuid.Nil {
+		return ErrInvalidInput
+	}
+	return s.repo.AdminRetireServer(ctx, serverID)
+}
+
 func (s *Services) ListHardwareOptions(ctx context.Context) ([]store.ServerCatalogHardwareOption, error) {
 	return s.repo.ListHardwareOptions(ctx)
 }
@@ -310,6 +331,10 @@ func (s *Services) ListAdminLocations(ctx context.Context) ([]store.AdminLocatio
 
 func (s *Services) ListAdminCPUProfiles(ctx context.Context) ([]store.AdminCPUProfileListItem, error) {
 	return s.repo.ListAdminCPUProfiles(ctx)
+}
+
+func (s *Services) ListAdminServerFamilies(ctx context.Context) ([]store.AdminServerFamilyListItem, error) {
+	return s.repo.ListAdminServerFamilies(ctx)
 }
 
 func (s *Services) ListAdminSwitches(ctx context.Context) ([]store.AdminSwitchListItem, error) {

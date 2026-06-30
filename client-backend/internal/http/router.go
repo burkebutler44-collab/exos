@@ -175,6 +175,7 @@ func NewRouterWithOptions(svc *services.Services, handlerOptions []handlers.Hand
 
 	admin.GET("/locations/health", platformPermission(domain.PlatformRacksView), h.AdminListLocationHealth)
 	admin.GET("/hardware/cpu-profiles", platformPermission(domain.PlatformServersView), h.AdminListCPUProfiles)
+	admin.GET("/hardware/server-families", platformPermission(domain.PlatformServersView), h.AdminListServerFamilies)
 	admin.GET("/hardware/options", platformPermission(domain.PlatformServersView), h.AdminListHardwareOptions)
 	admin.POST("/hardware/options", platformPermission(domain.PlatformServersUpdate), h.AdminCreateHardwareOption)
 	admin.GET("/hardware/fulfillment-orders", platformPermission(domain.PlatformServersView), h.AdminListHardwareFulfillmentOrders)

@@ -164,36 +164,54 @@ type createVirtualMachineRequest struct {
 	PrivateIP        *string `json:"private_ip"`
 }
 
+type createAdminServerDiskRequest struct {
+	DeviceName    string `json:"device_name"`
+	CapacityGB    int32  `json:"capacity_gb"`
+	MediaType     string `json:"media_type"`
+	InterfaceType string `json:"interface_type"`
+	Manufacturer  string `json:"manufacturer"`
+	Model         string `json:"model"`
+	SerialNumber  string `json:"serial_number"`
+	BootCapable   bool   `json:"boot_capable"`
+}
+
+type createAdminServerNICRequest struct {
+	Label        string  `json:"label"`
+	MACAddress   string  `json:"mac_address"`
+	SpeedMbps    int32   `json:"speed_mbps"`
+	IsPublic     bool    `json:"is_public"`
+	IPAddress    *string `json:"ip_address"`
+	Gateway      *string `json:"gateway"`
+	PrefixLength *int32  `json:"prefix_length"`
+	VLANID       *int32  `json:"vlan_id"`
+	SwitchID     *string `json:"switch_id"`
+	SwitchPort   string  `json:"switch_port"`
+	Purpose      string  `json:"purpose"`
+	Notes        string  `json:"notes"`
+}
+
+type createAdminServerBMCRequest struct {
+	ManagementIP string `json:"management_ip"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	Protocol     string `json:"protocol"`
+	Vendor       string `json:"vendor"`
+}
+
 type createAdminServerRequest struct {
-	LocationID          string  `json:"location_id" binding:"required"`
-	RackID              string  `json:"rack_id"`
-	Hostname            string  `json:"hostname" binding:"required"`
-	AssetTag            string  `json:"asset_tag"`
-	SerialNumber        string  `json:"serial_number"`
-	HardwareProfileName string  `json:"hardware_profile_name"`
-	CPUProfileID        *string `json:"cpu_profile_id"`
-	CPUModel            string  `json:"cpu_model"`
-	CPUCount            int32   `json:"cpu_count"`
-	CoreCount           int32   `json:"core_count"`
-	RAMGB               int32   `json:"ram_gb"`
-	DiskName            string  `json:"disk_name"`
-	DiskDescription     string  `json:"disk_description"`
-	NICDescription      string  `json:"nic_description"`
-	PublicIP            *string `json:"public_ip"`
-	IPAddress           *string `json:"ip_address"`
-	Gateway             *string `json:"gateway"`
-	SubnetMask          *string `json:"subnet_mask"`
-	VLANID              *int32  `json:"vlan_id"`
-	MACAddress          string  `json:"mac_address" binding:"required"`
-	BMCAddress          string  `json:"bmc_address" binding:"required"`
-	IPMIUsername        string  `json:"ipmi_username" binding:"required"`
-	IPMIPassword        string  `json:"ipmi_password" binding:"required"`
-	HourlyPriceCents    int64   `json:"hourly_price_cents"`
-	MonthlyPriceCents   int64   `json:"monthly_price_cents"`
-	QuarterlyPriceCents int64   `json:"quarterly_price_cents"`
-	YearlyPriceCents    int64   `json:"yearly_price_cents"`
-	Provisionable       bool    `json:"provisionable"`
-	Notes               string  `json:"notes"`
+	LocationID        string                         `json:"location_id" binding:"required"`
+	ServerFamilyID    string                         `json:"server_family_id" binding:"required"`
+	Hostname          string                         `json:"hostname" binding:"required"`
+	AssetTag          string                         `json:"asset_tag"`
+	SerialNumber      string                         `json:"serial_number"`
+	RackID            string                         `json:"rack_id"`
+	RackPosition      string                         `json:"rack_position"`
+	InstalledMemoryGB int32                          `json:"installed_memory_gb"`
+	Provisionable     bool                           `json:"provisionable"`
+	Notes             string                         `json:"notes"`
+	Disks             []createAdminServerDiskRequest `json:"disks"`
+	NetworkInterfaces []createAdminServerNICRequest  `json:"network_interfaces"`
+	BMC               *createAdminServerBMCRequest   `json:"bmc"`
 }
 
 type createHardwareOptionRequest struct {
@@ -228,6 +246,24 @@ type updateVirtualMachineRequest struct {
 	ImageID      *string `json:"image_id"`
 	OSImage      *string `json:"os_image"`
 	PrivateIP    *string `json:"private_ip"`
+}
+
+type adminAssignServerRequest struct {
+	OrganizationID string `json:"organization_id" binding:"required"`
+	Reason         string `json:"reason" binding:"required"`
+}
+
+type adminPowerServerRequest struct {
+	Action   string `json:"action" binding:"required"`
+	Location string `json:"location"`
+	RackID   string `json:"rack_id"`
+	Reason   string `json:"reason" binding:"required"`
+}
+
+type adminReinstallServerRequest struct {
+	Location string `json:"location"`
+	RackID   string `json:"rack_id"`
+	Reason   string `json:"reason" binding:"required"`
 }
 
 type createPostgresRequest struct {

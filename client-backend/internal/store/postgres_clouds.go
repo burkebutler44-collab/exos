@@ -164,6 +164,7 @@ func (s *PostgresStore) ListOrganizationServers(ctx context.Context, organizatio
 		select
 			s.id,
 			coalesce(nullif(s.metadata->>'hostname', ''), s.id::text) as hostname,
+			nullif(coalesce(s.asset_tag, s.metadata->>'asset_tag', s.metadata->>'label'), '') as inventory_label,
 			s.status,
 			coalesce(l.name, r.location) as location_name,
 			s.project_id,
@@ -176,19 +177,33 @@ func (s *PostgresStore) ListOrganizationServers(ctx context.Context, organizatio
 			s.reserved_memory_mb,
 			s.reserved_storage_gb,
 			nullif(coalesce(s.metadata->>'hardware_profile_name', s.metadata->>'sku'), '') as hardware_profile_name,
+			nullif(sf.display_name, '') as server_family_name,
+			nullif(coalesce(sf.cpu_model, s.metadata->>'cpu_model', s.metadata->>'cpu', s.metadata->>'processor'), '') as cpu_model,
+			nullif(coalesce(s.metadata->>'disk_description', s.metadata->>'storage', s.metadata->>'disk'), '') as disk_description,
+			nullif(coalesce(s.metadata->>'network_capacity', s.metadata->>'network_speed', s.metadata->>'nic_speed'), '') as network_capacity,
 			nullif(s.metadata->>'gpu', '') as gpu,
-			nullif(s.metadata->>'public_ip', '') as public_ip,
+			coalesce(nullif(s.metadata->>'public_ip', ''), primary_network.public_ip) as public_ip,
+			coalesce(nullif(s.metadata->>'private_ip', ''), primary_network.private_ip) as private_ip,
 			count(distinct vm.id) filter (where vm.deleted_at is null) as vm_count,
 			count(distinct ms.id) filter (where ms.deleted_at is null) as managed_service_count,
 			price.monthly_cost_cents,
+			s.created_at,
 			s.updated_at
 		from servers s
 		join racks r on r.id = s.rack_id
+		left join server_families sf on sf.id = s.server_family_id
 		left join locations l on l.id = r.location_id
 		left join projects p on p.id = s.project_id
 		left join clouds c on c.id = s.cloud_id and c.deleted_at is null
 		left join virtual_machines vm on vm.host_server_id = s.id
 		left join managed_services ms on ms.host_server_id = s.id
+		left join lateral (
+			select
+				max(sni.ip_address::text) filter (where sni.is_public = true or sni.purpose = 'public') as public_ip,
+				max(sni.ip_address::text) filter (where sni.is_public = false and sni.purpose in ('private', '')) as private_ip
+			from server_network_interfaces sni
+			where sni.server_id = s.id
+		) primary_network on true
 		left join lateral (
 			select sum((bsp.unit_price_cents * bsp.quantity)::bigint) as monthly_cost_cents
 			from billable_services bs
@@ -202,7 +217,8 @@ func (s *PostgresStore) ListOrganizationServers(ctx context.Context, organizatio
 				and bsp.effective_to is null
 		) price on true
 		where s.organization_id = $1
-		group by s.id, r.location, l.name, p.name, c.name, price.monthly_cost_cents
+		group by s.id, r.location, l.name, p.name, c.name, sf.display_name, sf.cpu_model,
+			primary_network.public_ip, primary_network.private_ip, price.monthly_cost_cents
 		order by s.updated_at desc`, organizationID)
 	if err != nil {
 		return nil, err
@@ -212,7 +228,16 @@ func (s *PostgresStore) ListOrganizationServers(ctx context.Context, organizatio
 	items := []FleetServer{}
 	for rows.Next() {
 		var item FleetServer
-		if err := rows.Scan(&item.ID, &item.Hostname, &item.Status, &item.LocationName, &item.ProjectID, &item.ProjectName, &item.CloudID, &item.CloudName, &item.ServerMode, &item.ModeStatus, &item.ReservedCPUCores, &item.ReservedMemoryMB, &item.ReservedStorageGB, &item.HardwareProfileName, &item.GPU, &item.PublicIP, &item.VMCount, &item.ServiceCount, &item.MonthlyCostCents, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&item.ID, &item.Hostname, &item.InventoryLabel, &item.Status, &item.LocationName,
+			&item.ProjectID, &item.ProjectName, &item.CloudID, &item.CloudName,
+			&item.ServerMode, &item.ModeStatus, &item.ReservedCPUCores,
+			&item.ReservedMemoryMB, &item.ReservedStorageGB, &item.HardwareProfileName,
+			&item.ServerFamilyName, &item.CPUModel, &item.DiskDescription,
+			&item.NetworkCapacity, &item.GPU, &item.PublicIP, &item.PrivateIP,
+			&item.VMCount, &item.ServiceCount, &item.MonthlyCostCents,
+			&item.CreatedAt, &item.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

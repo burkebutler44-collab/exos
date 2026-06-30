@@ -243,23 +243,31 @@ func (s *PostgresStore) ListAdminServers(ctx context.Context) ([]AdminServerList
 	rows, err := s.pool.Query(ctx, `
 		select
 			s.id,
-			coalesce(nullif(s.metadata->>'hostname', ''), s.id::text) as hostname,
-			coalesce(s.metadata->>'asset_tag', '') as asset_tag,
-			coalesce(s.metadata->>'serial_number', '') as serial_number,
+			s.hostname,
+			s.asset_tag,
+			s.serial_number,
 			s.status,
 			r.id as rack_id,
 			r.name as rack_name,
-			r.location as location_name,
+			s.rack_position,
+			s.location_id,
+			coalesce(l.name, r.location) as location_name,
+			s.server_family_id,
+			sf.display_name as server_family_name,
+			s.installed_memory_gb,
 			o.name as organization_name,
 			p.name as project_name,
-			coalesce(nullif(s.metadata->>'hardware_profile_name', ''), nullif(s.metadata->>'sku', ''), 'Unspecified') as hardware_profile_name,
-			nullif(s.metadata->>'public_ip', '') as public_ip,
-			s.bmc_address,
-			s.mac_address as primary_mac_address,
+			s.lifecycle_status,
+			s.allocation_status,
+			s.health_status,
 			s.provisionable,
+			s.notes,
+			s.created_at,
 			s.updated_at
 		from servers s
 		join racks r on r.id = s.rack_id
+		left join locations l on l.id = s.location_id
+		left join server_families sf on sf.id = s.server_family_id
 		left join organizations o on o.id = s.organization_id
 		left join projects p on p.id = s.project_id
 		order by s.updated_at desc`)
@@ -271,7 +279,30 @@ func (s *PostgresStore) ListAdminServers(ctx context.Context) ([]AdminServerList
 	items := []AdminServerListItem{}
 	for rows.Next() {
 		var item AdminServerListItem
-		if err := rows.Scan(&item.ID, &item.Hostname, &item.AssetTag, &item.SerialNumber, &item.Status, &item.RackID, &item.RackName, &item.LocationName, &item.OrganizationName, &item.ProjectName, &item.HardwareProfileName, &item.PublicIP, &item.BMCAddress, &item.PrimaryMACAddress, &item.Provisionable, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&item.ID,
+			&item.Hostname,
+			&item.AssetTag,
+			&item.SerialNumber,
+			&item.Status,
+			&item.RackID,
+			&item.RackName,
+			&item.RackPosition,
+			&item.LocationID,
+			&item.LocationName,
+			&item.ServerFamilyID,
+			&item.ServerFamilyName,
+			&item.InstalledMemoryGB,
+			&item.OrganizationName,
+			&item.ProjectName,
+			&item.LifecycleStatus,
+			&item.AllocationStatus,
+			&item.HealthStatus,
+			&item.Provisionable,
+			&item.Notes,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -286,6 +317,11 @@ func (s *PostgresStore) CreateAdminServer(ctx context.Context, params CreateAdmi
 	}
 	defer tx.Rollback(ctx)
 
+	hostname := params.Hostname
+	if hostname == "" {
+		hostname = params.Hostname
+	}
+
 	var locationName, locationKeyword string
 	if err := tx.QueryRow(ctx, `
 		select name, coalesce(nullif(keyword, ''), upper(code))
@@ -293,10 +329,11 @@ func (s *PostgresStore) CreateAdminServer(ctx context.Context, params CreateAdmi
 		where id = $1`, params.LocationID).Scan(&locationName, &locationKeyword); err != nil {
 		return AdminServerListItem{}, err
 	}
-	if params.RackID == "" {
-		params.RackID = normalizeSlug(locationKeyword)
+	rackID := params.RackID
+	if rackID == "" {
+		rackID = normalizeSlug(locationKeyword)
 	}
-	rackName := params.RackID
+	rackName := rackID
 	if locationKeyword != "" {
 		rackName = locationKeyword + " Rack"
 	}
@@ -309,103 +346,66 @@ func (s *PostgresStore) CreateAdminServer(ctx context.Context, params CreateAdmi
 			location_id = excluded.location_id,
 			location = excluded.location,
 			updated_at = now()`,
-		params.RackID, rackName, locationName, params.LocationID)
+		rackID, rackName, locationName, params.LocationID)
 	if err != nil {
-		return AdminServerListItem{}, err
-	}
-
-	if params.CPUProfileID != nil {
-		if err := tx.QueryRow(ctx, `
-			select name, socket_count, core_count
-			from cpu_profiles
-			where id = $1`, *params.CPUProfileID).Scan(&params.CPUModel, &params.CPUCount, &params.CoreCount); err != nil {
-			return AdminServerListItem{}, err
-		}
-	}
-
-	metadata := map[string]any{
-		"hostname":              params.Hostname,
-		"asset_tag":             params.AssetTag,
-		"serial_number":         params.SerialNumber,
-		"hardware_profile_name": params.HardwareProfileName,
-		"cpu_profile_id":        params.CPUProfileID,
-		"cpu_model":             params.CPUModel,
-		"cpu_count":             params.CPUCount,
-		"core_count":            params.CoreCount,
-		"ram_gb":                params.RAMGB,
-		"disk_name":             params.DiskName,
-		"disk_description":      params.DiskDescription,
-		"nic_description":       params.NICDescription,
-		"ipmi_username":         params.IPMIUsername,
-		"ipmi_password":         params.IPMIPassword,
-		"hourly_price_cents":    params.HourlyPriceCents,
-		"monthly_price_cents":   params.MonthlyPriceCents,
-		"quarterly_price_cents": params.QuarterlyPriceCents,
-		"yearly_price_cents":    params.YearlyPriceCents,
-		"location_keyword":      locationKeyword,
-		"notes":                 params.Notes,
-	}
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		return AdminServerListItem{}, err
-	}
-
-	familySlug := normalizeSlug(fmt.Sprintf("%s-%d-core", params.CPUModel, params.CoreCount))
-	var serverFamilyID uuid.UUID
-	if err := tx.QueryRow(ctx, `
-		with existing as (
-			select id
-			from server_families
-			where lower(cpu_model) = lower($1)
-				and core_count = $3
-			order by created_at
-			limit 1
-		),
-		inserted as (
-			insert into server_families (
-				display_name, slug, cpu_manufacturer, cpu_model, core_count, thread_count, workload_category
-			)
-			select
-				$1,
-				$2,
-				case
-					when lower($1) like '%amd%' or lower($1) like '%epyc%' or lower($1) like '%ryzen%' then 'AMD'
-					when lower($1) like '%intel%' or lower($1) like '%xeon%' then 'Intel'
-					else ''
-				end,
-				$1,
-				$3,
-				$3 * 2,
-				case when $4 >= 384 then 'memory' else 'cpu' end
-			where not exists (select 1 from existing)
-			on conflict (slug) do update set updated_at = now()
-			returning id
-		)
-		select id from existing
-		union all
-		select id from inserted
-		limit 1`,
-		params.CPUModel, familySlug, params.CoreCount, params.RAMGB).Scan(&serverFamilyID); err != nil {
 		return AdminServerListItem{}, err
 	}
 
 	var serverID uuid.UUID
 	if err := tx.QueryRow(ctx, `
-		insert into servers (rack_id, server_family_id, status, bmc_address, mac_address, provisionable, metadata)
-		values ($1, $2, 'available', $3, $4, $5, $6)
+		insert into servers (rack_id, server_family_id, location_id, status, hostname, asset_tag, serial_number,
+			installed_memory_gb, rack_position, provisionable, notes, bmc_address, mac_address, metadata)
+		values ($1, $2, $3, 'available', $4, $5, $6, $7, $8, $9, $10, '', '', '{}'::jsonb)
 		returning id`,
-		params.RackID, serverFamilyID, params.BMCAddress, params.MACAddress, params.Provisionable, metadataBytes).Scan(&serverID); err != nil {
+		rackID, params.ServerFamilyID, params.LocationID,
+		hostname, params.AssetTag, params.SerialNumber,
+		params.InstalledMemoryGB, params.RackPosition, params.Provisionable, params.Notes).Scan(&serverID); err != nil {
 		return AdminServerListItem{}, err
 	}
 
-	_, err = tx.Exec(ctx, `
-		insert into server_network_interfaces
-			(server_id, label, mac_address, ip_address, gateway, subnet_mask, switch_port, vlan_id, is_primary)
-		values
-			($1, 'primary', $2, nullif($3, '')::inet, nullif($4, '')::inet, $5, '', $6, true)`,
-		serverID, params.MACAddress, stringValue(params.IPAddress), stringValue(params.Gateway), stringValue(params.SubnetMask), params.VLANID)
-	if err != nil {
-		return AdminServerListItem{}, err
+	// Insert network interfaces
+	for _, nic := range params.NetworkInterfaces {
+		_, err = tx.Exec(ctx, `
+			insert into server_network_interfaces
+				(server_id, label, mac_address, speed_mbps, is_public, ip_address, gateway, prefix_length, vlan_id,
+				 switch_id, switch_port, purpose, notes)
+			values
+				($1, $2, $3::macaddr, $4, $5, nullif($6, '')::inet, nullif($7, '')::inet, $8, $9,
+				 $10, $11, $12, $13)`,
+			serverID, nic.Label, nic.MACAddress, nic.SpeedMbps, nic.IsPublic,
+			stringValue(nic.IPAddress), stringValue(nic.Gateway), nic.PrefixLength, nic.VLANID,
+			nic.SwitchID, nic.SwitchPort, nic.Purpose, nic.Notes)
+		if err != nil {
+			return AdminServerListItem{}, err
+		}
+	}
+
+	// Insert disks
+	for _, disk := range params.Disks {
+		_, err = tx.Exec(ctx, `
+			insert into server_disks
+				(server_id, device_name, capacity_gb, media_type, interface_type, manufacturer, model, serial_number, boot_capable)
+			values
+				($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			serverID, disk.DeviceName, disk.CapacityGB, disk.MediaType, disk.InterfaceType,
+			disk.Manufacturer, disk.Model, disk.SerialNumber, disk.BootCapable)
+		if err != nil {
+			return AdminServerListItem{}, err
+		}
+	}
+
+	// Insert BMC
+	if params.BMC != nil {
+		_, err = tx.Exec(ctx, `
+			insert into bmc_management
+				(server_id, management_ip, username, password, protocol, vendor)
+			values
+				($1, nullif($2, '')::inet, $3, $4, $5, $6)`,
+			serverID, params.BMC.ManagementIP, params.BMC.Username, params.BMC.Password,
+			params.BMC.Protocol, params.BMC.Vendor)
+		if err != nil {
+			return AdminServerListItem{}, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -420,35 +420,61 @@ func (s *PostgresStore) GetAdminServerListItem(ctx context.Context, serverID uui
 	err := s.pool.QueryRow(ctx, `
 		select
 			s.id,
-			coalesce(nullif(s.metadata->>'hostname', ''), s.id::text) as hostname,
-			coalesce(s.metadata->>'asset_tag', '') as asset_tag,
-			coalesce(s.metadata->>'serial_number', '') as serial_number,
+			s.hostname,
+			s.asset_tag,
+			s.serial_number,
 			s.status,
 			r.id as rack_id,
 			r.name as rack_name,
+			s.rack_position,
+			s.location_id,
 			coalesce(l.name, r.location) as location_name,
+			s.server_family_id,
+			sf.display_name as server_family_name,
+			s.installed_memory_gb,
 			o.name as organization_name,
 			p.name as project_name,
-			coalesce(s.metadata->>'hardware_profile_name', '') as hardware_profile_name,
-			ni.ip_address::text as public_ip,
-			s.bmc_address,
-			coalesce(nullif(ni.mac_address::text, ''), s.mac_address) as primary_mac_address,
+			s.lifecycle_status,
+			s.allocation_status,
+			s.health_status,
 			s.provisionable,
+			s.notes,
+			s.created_at,
 			s.updated_at
 		from servers s
 		join racks r on r.id = s.rack_id
-		left join locations l on l.id = r.location_id
+		left join locations l on l.id = s.location_id
+		left join server_families sf on sf.id = s.server_family_id
 		left join organizations o on o.id = s.organization_id
 		left join projects p on p.id = s.project_id
-		left join lateral (
-			select *
-			from server_network_interfaces
-			where server_id = s.id
-			order by is_primary desc, created_at asc
-			limit 1
-		) ni on true
-		where s.id = $1`, serverID).Scan(&item.ID, &item.Hostname, &item.AssetTag, &item.SerialNumber, &item.Status, &item.RackID, &item.RackName, &item.LocationName, &item.OrganizationName, &item.ProjectName, &item.HardwareProfileName, &item.PublicIP, &item.BMCAddress, &item.PrimaryMACAddress, &item.Provisionable, &item.UpdatedAt)
-	return item, err
+		where s.id = $1`, serverID).Scan(
+		&item.ID,
+		&item.Hostname,
+		&item.AssetTag,
+		&item.SerialNumber,
+		&item.Status,
+		&item.RackID,
+		&item.RackName,
+		&item.RackPosition,
+		&item.LocationID,
+		&item.LocationName,
+		&item.ServerFamilyID,
+		&item.ServerFamilyName,
+		&item.InstalledMemoryGB,
+		&item.OrganizationName,
+		&item.ProjectName,
+		&item.LifecycleStatus,
+		&item.AllocationStatus,
+		&item.HealthStatus,
+		&item.Provisionable,
+		&item.Notes,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	if err != nil {
+		return AdminServerListItem{}, err
+	}
+	return item, nil
 }
 
 func (s *PostgresStore) ListAdminRacks(ctx context.Context) ([]AdminRackListItem, error) {
@@ -544,6 +570,39 @@ func (s *PostgresStore) ListAdminCPUProfiles(ctx context.Context) ([]AdminCPUPro
 		}
 		item.Metadata = map[string]any{}
 		_ = json.Unmarshal(metadata, &item.Metadata)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *PostgresStore) ListAdminServerFamilies(ctx context.Context) ([]AdminServerFamilyListItem, error) {
+	rows, err := s.pool.Query(ctx, `
+		select
+			id,
+			display_name,
+			slug,
+			cpu_manufacturer,
+			cpu_model,
+			core_count,
+			thread_count,
+			base_clock_ghz::float8,
+			boost_clock_ghz::float8,
+			workload_category,
+			active,
+			display_order
+		from server_families
+		order by display_order, display_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []AdminServerFamilyListItem{}
+	for rows.Next() {
+		var item AdminServerFamilyListItem
+		if err := rows.Scan(&item.ID, &item.DisplayName, &item.Slug, &item.CPUManufacturer, &item.CPUModel, &item.CoreCount, &item.ThreadCount, &item.BaseClockGHz, &item.BoostClockGHz, &item.WorkloadCategory, &item.Active, &item.DisplayOrder); err != nil {
+			return nil, err
+		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -778,4 +837,46 @@ func (s *PostgresStore) ListAdminAuditEvents(ctx context.Context) ([]AdminAuditE
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (s *PostgresStore) AdminAssignServer(ctx context.Context, serverID, organizationID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`update servers set organization_id = $2 where id = $1`,
+		serverID, organizationID,
+	)
+	if err != nil {
+		return fmt.Errorf("assign server: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *PostgresStore) AdminReleaseServer(ctx context.Context, serverID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`update servers set organization_id = null, project_id = null where id = $1`,
+		serverID,
+	)
+	if err != nil {
+		return fmt.Errorf("release server: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *PostgresStore) AdminRetireServer(ctx context.Context, serverID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`update servers set status = 'terminated', lifecycle_status = 'retired' where id = $1`,
+		serverID,
+	)
+	if err != nil {
+		return fmt.Errorf("retire server: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

@@ -113,6 +113,7 @@ type CloudServer struct {
 type FleetServer struct {
 	ID                  uuid.UUID  `json:"id"`
 	Hostname            string     `json:"hostname"`
+	InventoryLabel      *string    `json:"inventory_label"`
 	Status              string     `json:"status"`
 	LocationName        string     `json:"location_name"`
 	ProjectID           *uuid.UUID `json:"project_id"`
@@ -125,11 +126,17 @@ type FleetServer struct {
 	ReservedMemoryMB    *int32     `json:"reserved_memory_mb"`
 	ReservedStorageGB   *int32     `json:"reserved_storage_gb"`
 	HardwareProfileName *string    `json:"hardware_profile_name"`
+	ServerFamilyName    *string    `json:"server_family_name"`
+	CPUModel            *string    `json:"cpu_model"`
+	DiskDescription     *string    `json:"disk_description"`
+	NetworkCapacity     *string    `json:"network_capacity"`
 	GPU                 *string    `json:"gpu"`
 	PublicIP            *string    `json:"public_ip"`
+	PrivateIP           *string    `json:"private_ip"`
 	VMCount             int64      `json:"vm_count"`
 	ServiceCount        int64      `json:"managed_service_count"`
 	MonthlyCostCents    *int64     `json:"monthly_cost_cents"`
+	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
@@ -356,22 +363,28 @@ type AdminBillingAccountListItem struct {
 }
 
 type AdminServerListItem struct {
-	ID                  uuid.UUID `json:"id"`
-	Hostname            string    `json:"hostname"`
-	AssetTag            string    `json:"asset_tag"`
-	SerialNumber        string    `json:"serial_number"`
-	Status              string    `json:"status"`
-	RackID              string    `json:"rack_id"`
-	RackName            string    `json:"rack_name"`
-	LocationName        string    `json:"location_name"`
-	OrganizationName    *string   `json:"organization_name"`
-	ProjectName         *string   `json:"project_name"`
-	HardwareProfileName string    `json:"hardware_profile_name"`
-	PublicIP            *string   `json:"public_ip"`
-	BMCAddress          string    `json:"bmc_address"`
-	PrimaryMACAddress   string    `json:"primary_mac_address"`
-	Provisionable       bool      `json:"provisionable"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ID                uuid.UUID  `json:"id"`
+	Hostname          string     `json:"hostname"`
+	AssetTag          string     `json:"asset_tag"`
+	SerialNumber      string     `json:"serial_number"`
+	Status            string     `json:"status"`
+	RackID            string     `json:"rack_id"`
+	RackName          string     `json:"rack_name"`
+	RackPosition      string     `json:"rack_position"`
+	LocationID        *uuid.UUID `json:"location_id"`
+	LocationName      string     `json:"location_name"`
+	ServerFamilyID    *uuid.UUID `json:"server_family_id"`
+	ServerFamilyName  *string    `json:"server_family_name"`
+	InstalledMemoryGB int32      `json:"installed_memory_gb"`
+	OrganizationName  *string    `json:"organization_name"`
+	ProjectName       *string    `json:"project_name"`
+	LifecycleStatus   string     `json:"lifecycle_status"`
+	AllocationStatus  string     `json:"allocation_status"`
+	HealthStatus      string     `json:"health_status"`
+	Provisionable     bool       `json:"provisionable"`
+	Notes             string     `json:"notes"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type AdminRackListItem struct {
@@ -395,6 +408,21 @@ type AdminLocationListItem struct {
 	City    string    `json:"city"`
 	Region  string    `json:"region"`
 	Country string    `json:"country"`
+}
+
+type AdminServerFamilyListItem struct {
+	ID               uuid.UUID `json:"id"`
+	DisplayName      string    `json:"display_name"`
+	Slug             string    `json:"slug"`
+	CPUManufacturer  string    `json:"cpu_manufacturer"`
+	CPUModel         string    `json:"cpu_model"`
+	CoreCount        int32     `json:"core_count"`
+	ThreadCount      int32     `json:"thread_count"`
+	BaseClockGHz     *float64  `json:"base_clock_ghz,omitempty"`
+	BoostClockGHz    *float64  `json:"boost_clock_ghz,omitempty"`
+	WorkloadCategory string    `json:"workload_category"`
+	Active           bool      `json:"active"`
+	DisplayOrder     int32     `json:"display_order"`
 }
 
 type AdminOSImageListItem struct {
@@ -659,36 +687,54 @@ type HardwareFulfillmentOrder struct {
 	UpdatedAt              time.Time               `json:"updated_at"`
 }
 
+type CreateServerDiskParams struct {
+	DeviceName    string `json:"device_name"`
+	CapacityGB    int32  `json:"capacity_gb"`
+	MediaType     string `json:"media_type"`
+	InterfaceType string `json:"interface_type"`
+	Manufacturer  string `json:"manufacturer"`
+	Model         string `json:"model"`
+	SerialNumber  string `json:"serial_number"`
+	BootCapable   bool   `json:"boot_capable"`
+}
+
+type CreateServerNICParams struct {
+	Label        string     `json:"label"`
+	MACAddress   string     `json:"mac_address"`
+	SpeedMbps    int32      `json:"speed_mbps"`
+	IsPublic     bool       `json:"is_public"`
+	IPAddress    *string    `json:"ip_address"`
+	Gateway      *string    `json:"gateway"`
+	PrefixLength *int32     `json:"prefix_length"`
+	VLANID       *int32     `json:"vlan_id"`
+	SwitchID     *uuid.UUID `json:"switch_id"`
+	SwitchPort   string     `json:"switch_port"`
+	Purpose      string     `json:"purpose"`
+	Notes        string     `json:"notes"`
+}
+
+type CreateServerBMCParams struct {
+	ManagementIP string `json:"management_ip"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	Protocol     string `json:"protocol"`
+	Vendor       string `json:"vendor"`
+}
+
 type CreateAdminServerParams struct {
-	LocationID          uuid.UUID
-	RackID              string
-	Hostname            string
-	AssetTag            string
-	SerialNumber        string
-	HardwareProfileName string
-	CPUProfileID        *uuid.UUID
-	CPUModel            string
-	CPUCount            int32
-	CoreCount           int32
-	RAMGB               int32
-	DiskName            string
-	DiskDescription     string
-	NICDescription      string
-	PublicIP            *string
-	Gateway             *string
-	SubnetMask          *string
-	VLANID              *int32
-	MACAddress          string
-	IPAddress           *string
-	BMCAddress          string
-	IPMIUsername        string
-	IPMIPassword        string
-	HourlyPriceCents    int64
-	MonthlyPriceCents   int64
-	QuarterlyPriceCents int64
-	YearlyPriceCents    int64
-	Provisionable       bool
-	Notes               string
+	LocationID        uuid.UUID
+	ServerFamilyID    uuid.UUID
+	Hostname          string
+	AssetTag          string
+	SerialNumber      string
+	RackID            string
+	RackPosition      string
+	InstalledMemoryGB int32
+	Provisionable     bool
+	Notes             string
+	Disks             []CreateServerDiskParams
+	NetworkInterfaces []CreateServerNICParams
+	BMC               *CreateServerBMCParams
 }
 
 type ProvisioningServerInventory struct {
@@ -897,6 +943,9 @@ type Repository interface {
 	ListAdminBillingAccounts(ctx context.Context) ([]AdminBillingAccountListItem, error)
 	ListAdminServers(ctx context.Context) ([]AdminServerListItem, error)
 	CreateAdminServer(ctx context.Context, params CreateAdminServerParams) (AdminServerListItem, error)
+	AdminAssignServer(ctx context.Context, serverID, organizationID uuid.UUID) error
+	AdminReleaseServer(ctx context.Context, serverID uuid.UUID) error
+	AdminRetireServer(ctx context.Context, serverID uuid.UUID) error
 	ListHardwareOptions(ctx context.Context) ([]ServerCatalogHardwareOption, error)
 	CreateHardwareOption(ctx context.Context, params CreateHardwareOptionParams) (ServerCatalogHardwareOption, error)
 	ListHardwareFulfillmentOrders(ctx context.Context) ([]HardwareFulfillmentOrder, error)
@@ -904,6 +953,7 @@ type Repository interface {
 	ListAdminRacks(ctx context.Context) ([]AdminRackListItem, error)
 	ListAdminLocations(ctx context.Context) ([]AdminLocationListItem, error)
 	ListAdminCPUProfiles(ctx context.Context) ([]AdminCPUProfileListItem, error)
+	ListAdminServerFamilies(ctx context.Context) ([]AdminServerFamilyListItem, error)
 	ListAdminOSImages(ctx context.Context) ([]AdminOSImageListItem, error)
 	ListAdminSwitches(ctx context.Context) ([]AdminSwitchListItem, error)
 	ListAdminEdgeRouters(ctx context.Context) ([]AdminEdgeRouterListItem, error)

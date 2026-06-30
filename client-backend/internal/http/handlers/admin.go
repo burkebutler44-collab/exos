@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"relay/client-backend/internal/provisioning/messages"
 	"relay/client-backend/internal/services"
 	"relay/client-backend/internal/store"
 
@@ -93,45 +94,78 @@ func (h *Handler) AdminCreateServer(c *gin.Context) {
 		writeError(c, services.ErrInvalidInput)
 		return
 	}
-	var cpuProfileID *uuid.UUID
-	if req.CPUProfileID != nil && strings.TrimSpace(*req.CPUProfileID) != "" {
-		parsed, err := uuid.Parse(strings.TrimSpace(*req.CPUProfileID))
-		if err != nil {
-			writeError(c, services.ErrInvalidInput)
-			return
-		}
-		cpuProfileID = &parsed
+	serverFamilyID, err := uuid.Parse(req.ServerFamilyID)
+	if err != nil {
+		writeError(c, services.ErrInvalidInput)
+		return
 	}
+
+	var bmc *store.CreateServerBMCParams
+	if req.BMC != nil {
+		bmc = &store.CreateServerBMCParams{
+			ManagementIP: strings.TrimSpace(req.BMC.ManagementIP),
+			Username:     strings.TrimSpace(req.BMC.Username),
+			Password:     req.BMC.Password,
+			Protocol:     strings.TrimSpace(req.BMC.Protocol),
+			Vendor:       strings.TrimSpace(req.BMC.Vendor),
+		}
+	}
+
+	disks := make([]store.CreateServerDiskParams, len(req.Disks))
+	for i, d := range req.Disks {
+		disks[i] = store.CreateServerDiskParams{
+			DeviceName:    strings.TrimSpace(d.DeviceName),
+			CapacityGB:    d.CapacityGB,
+			MediaType:     strings.TrimSpace(d.MediaType),
+			InterfaceType: strings.TrimSpace(d.InterfaceType),
+			Manufacturer:  strings.TrimSpace(d.Manufacturer),
+			Model:         strings.TrimSpace(d.Model),
+			SerialNumber:  strings.TrimSpace(d.SerialNumber),
+			BootCapable:   d.BootCapable,
+		}
+	}
+
+	nicParams := make([]store.CreateServerNICParams, len(req.NetworkInterfaces))
+	for i, n := range req.NetworkInterfaces {
+		var switchID *uuid.UUID
+		if n.SwitchID != nil && strings.TrimSpace(*n.SwitchID) != "" {
+			parsed, err := uuid.Parse(strings.TrimSpace(*n.SwitchID))
+			if err != nil {
+				writeError(c, services.ErrInvalidInput)
+				return
+			}
+			switchID = &parsed
+		}
+		nicParams[i] = store.CreateServerNICParams{
+			Label:        strings.TrimSpace(n.Label),
+			MACAddress:   strings.TrimSpace(n.MACAddress),
+			SpeedMbps:    n.SpeedMbps,
+			IsPublic:     n.IsPublic,
+			IPAddress:    n.IPAddress,
+			Gateway:      n.Gateway,
+			PrefixLength: n.PrefixLength,
+			VLANID:       n.VLANID,
+			SwitchID:     switchID,
+			SwitchPort:   strings.TrimSpace(n.SwitchPort),
+			Purpose:      strings.TrimSpace(n.Purpose),
+			Notes:        strings.TrimSpace(n.Notes),
+		}
+	}
+
 	item, err := h.svc.CreateAdminServer(c.Request.Context(), store.CreateAdminServerParams{
-		LocationID:          locationID,
-		RackID:              strings.TrimSpace(req.RackID),
-		Hostname:            strings.TrimSpace(req.Hostname),
-		AssetTag:            strings.TrimSpace(req.AssetTag),
-		SerialNumber:        strings.TrimSpace(req.SerialNumber),
-		HardwareProfileName: strings.TrimSpace(req.HardwareProfileName),
-		CPUProfileID:        cpuProfileID,
-		CPUModel:            strings.TrimSpace(req.CPUModel),
-		CPUCount:            req.CPUCount,
-		CoreCount:           req.CoreCount,
-		RAMGB:               req.RAMGB,
-		DiskName:            strings.TrimSpace(req.DiskName),
-		DiskDescription:     strings.TrimSpace(req.DiskDescription),
-		NICDescription:      strings.TrimSpace(req.NICDescription),
-		PublicIP:            req.PublicIP,
-		IPAddress:           req.IPAddress,
-		Gateway:             req.Gateway,
-		SubnetMask:          req.SubnetMask,
-		VLANID:              req.VLANID,
-		MACAddress:          strings.TrimSpace(req.MACAddress),
-		BMCAddress:          strings.TrimSpace(req.BMCAddress),
-		IPMIUsername:        strings.TrimSpace(req.IPMIUsername),
-		IPMIPassword:        req.IPMIPassword,
-		HourlyPriceCents:    req.HourlyPriceCents,
-		MonthlyPriceCents:   req.MonthlyPriceCents,
-		QuarterlyPriceCents: req.QuarterlyPriceCents,
-		YearlyPriceCents:    req.YearlyPriceCents,
-		Provisionable:       req.Provisionable,
-		Notes:               strings.TrimSpace(req.Notes),
+		LocationID:       locationID,
+		ServerFamilyID:   serverFamilyID,
+		Hostname:         strings.TrimSpace(req.Hostname),
+		AssetTag:         strings.TrimSpace(req.AssetTag),
+		SerialNumber:     strings.TrimSpace(req.SerialNumber),
+		RackID:           strings.TrimSpace(req.RackID),
+		RackPosition:     strings.TrimSpace(req.RackPosition),
+		InstalledMemoryGB: req.InstalledMemoryGB,
+		Provisionable:    req.Provisionable,
+		Notes:            strings.TrimSpace(req.Notes),
+		Disks:            disks,
+		NetworkInterfaces: nicParams,
+		BMC:              bmc,
 	})
 	if err != nil {
 		writeError(c, err)
@@ -231,9 +265,6 @@ func (h *Handler) AdminGetServerPower(c *gin.Context) {
 func (h *Handler) AdminProvisionServer(c *gin.Context) {
 	adminPending(c, "admin provisioning command wiring pending")
 }
-func (h *Handler) AdminReinstallServer(c *gin.Context) {
-	adminPending(c, "admin reinstall command wiring pending")
-}
 func (h *Handler) AdminRescueServer(c *gin.Context) {
 	adminPending(c, "admin rescue command wiring pending")
 }
@@ -264,6 +295,14 @@ func (h *Handler) AdminListLocations(c *gin.Context) {
 }
 func (h *Handler) AdminListCPUProfiles(c *gin.Context) {
 	items, err := h.svc.ListAdminCPUProfiles(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+func (h *Handler) AdminListServerFamilies(c *gin.Context) {
+	items, err := h.svc.ListAdminServerFamilies(c.Request.Context())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -429,17 +468,44 @@ func (h *Handler) AdminManualDebit(c *gin.Context) {
 }
 
 func (h *Handler) AdminAssignServer(c *gin.Context) {
-	if !requireAdminReason(c) {
+	req, ok := bindJSON[adminAssignServerRequest](c)
+	if !ok {
 		return
 	}
-	adminPending(c, "server assignment workflow wiring pending")
+	organizationUUID, err := uuid.Parse(req.OrganizationID)
+	if err != nil {
+		writeError(c, services.ErrInvalidInput)
+		return
+	}
+	serverUUID, ok := paramID(c, "serverId")
+	if !ok {
+		return
+	}
+	if err := h.svc.AdminAssignServer(c.Request.Context(), serverUUID, organizationUUID); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "assigned"})
 }
 
 func (h *Handler) AdminReleaseServer(c *gin.Context) {
 	if !requireAdminReason(c) {
 		return
 	}
-	adminPending(c, "server release workflow wiring pending")
+	var req adminReasonRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, services.ErrInvalidInput)
+		return
+	}
+	serverUUID, ok := paramID(c, "serverId")
+	if !ok {
+		return
+	}
+	if err := h.svc.AdminReleaseServer(c.Request.Context(), serverUUID); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "released"})
 }
 
 func (h *Handler) AdminReserveServer(c *gin.Context) {
@@ -453,14 +519,88 @@ func (h *Handler) AdminRetireServer(c *gin.Context) {
 	if !requireAdminReason(c) {
 		return
 	}
-	adminPending(c, "server retirement workflow wiring pending")
+	var req adminReasonRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, services.ErrInvalidInput)
+		return
+	}
+	serverUUID, ok := paramID(c, "serverId")
+	if !ok {
+		return
+	}
+	if err := h.svc.AdminRetireServer(c.Request.Context(), serverUUID); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "retired"})
 }
 
 func (h *Handler) AdminPowerServer(c *gin.Context) {
-	if !requireAdminReason(c) {
+	if h.provisionPublisher == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "power command publisher unavailable"})
 		return
 	}
-	adminPending(c, "admin power command publisher wiring pending")
+	req, ok := bindJSON[adminPowerServerRequest](c)
+	if !ok {
+		return
+	}
+	serverID := c.Param("serverId")
+	location := normalizeProvisionLocation(req.Location)
+	rackID := req.RackID
+	if rackID == "" {
+		rackID = location
+	} else {
+		rackID = strings.ToLower(strings.TrimSpace(rackID))
+	}
+	payload := messages.PowerCommand{ServerID: serverID, Action: messages.PowerAction(req.Action)}
+	env, err := messages.NewEnvelope(messages.PowerCommandType, rackID, payload)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid power payload"})
+		return
+	}
+	env.ServerID = &serverID
+	correlationID := uuid.NewString()
+	env.CorrelationID = &correlationID
+	subject := messages.SubjectBuilder{}.DataCenterServerPower(location)
+	if err := h.provisionPublisher.PublishCommand(c.Request.Context(), subject, env); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "publish power command failed"})
+		return
+	}
+	c.JSON(http.StatusAccepted, gin.H{"message_id": env.MessageID, "correlation_id": correlationID, "subject": subject, "status": "queued"})
+}
+
+func (h *Handler) AdminReinstallServer(c *gin.Context) {
+	if h.provisionPublisher == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "provisioning command publisher unavailable"})
+		return
+	}
+	req, ok := bindJSON[adminReinstallServerRequest](c)
+	if !ok {
+		return
+	}
+	serverID := c.Param("serverId")
+	location := normalizeProvisionLocation(req.Location)
+	rackID := req.RackID
+	if rackID == "" {
+		rackID = location
+	} else {
+		rackID = strings.ToLower(strings.TrimSpace(rackID))
+	}
+	payload := messages.ReinstallServerCommand{ServerID: serverID}
+	env, err := messages.NewEnvelope(messages.ReinstallServerCommandType, rackID, payload)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reinstall payload"})
+		return
+	}
+	env.ServerID = &serverID
+	correlationID := uuid.NewString()
+	env.CorrelationID = &correlationID
+	subject := messages.SubjectBuilder{}.DataCenterProvisionRequest(location)
+	if err := h.provisionPublisher.PublishCommand(c.Request.Context(), subject, env); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "publish reinstall command failed"})
+		return
+	}
+	c.JSON(http.StatusAccepted, gin.H{"message_id": env.MessageID, "correlation_id": correlationID, "subject": subject, "status": "queued"})
 }
 
 func (h *Handler) AdminRetryProvisioningJob(c *gin.Context) {
